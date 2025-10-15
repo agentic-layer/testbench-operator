@@ -1,0 +1,70 @@
+# The workflow is a Kubernetes CRD with the usual apiVersion, kind and metadata.
+# It configures the steps for your test automation pipeline.
+apiVersion: testworkflows.testkube.io/v1
+kind: TestWorkflow
+metadata:
+  # The workflow will have a name that you define here.
+  name: my-test
+  # By default, workflows should be applied to the namespace of the Testkube agent.
+  namespace: testkube
+  # Labels allow you to filter and group within the Dashboard and CLI.
+  labels:
+    app.kubernetes.io/name: my-api
+    app.kubernetes.io/part-of: my-cms
+    testkube.io/test-tool: k6s
+    testkube.io/test-category: load-test
+spec:
+  # The content property allows you to fetch your test cases and source code.
+  # You can check out content from Git or create specific files from strings.
+  # In this case, we'll go for an inline test for simplicity.
+  content:
+    files:
+      - path: k6.js
+        content: |
+          import http from "k6/http";
+          import {
+            textSummary,
+            jUnit,
+          } from "https://jslib.k6.io/k6-summary/0.0.2/index.js";
+
+          export const options = {
+            thresholds: {
+              http_req_failed: ["rate<0.01"],
+            },
+          };
+          export default function () {
+            http.get("http://test.k6.io");
+          }
+          export function handleSummary(data) {
+            return {
+              stdout: textSummary(data, { indent: " ", enableColors: true }),
+              "junit.xml": jUnit(data),
+            };
+          }
+  # Workflows default to the container image's working directory. Often you will want
+  # to update this to the directory of your content, but be mindful as some testing
+  # tools might malfunction when their container's working directory is changed.
+  # Git content is put in `/data/repo`, whereas relative file content in `/data`.
+  # A few useful hints about the `workingDir` resolution:
+  # - without `workingDir` (or with empty) in step - it will use the parent's working dir (down the workflow specification tree)
+  # - without `workingDir` (or with empty) at all in the workflow specification tree - it will use working dir from the image default
+  # - with relative `workingDir` in step - it will go further from parent's working dir (down the workflow specification tree)
+  # - with relative `workingDir` in step, but no other in a workflow specification tree - it will go further from the image default
+  # - the parent is whatever is found in the workflow specification tree, for example, the Global Template's `spec.container.workingDir`
+  # goes down to Test Workflows `spec.container.workingDir` (unless overridden).
+  container:
+    workingDir: /data
+  # Steps are the main building blocks in workflows. Each step is executed in sequential order.
+  # You can use steps to setup or teardown your testing tool and test dependencies.
+  steps:
+    # Each step can run with their own image, yet the file system is shared across steps.
+    # In this case, we'll run K6 on our test defined above.
+    - name: Run k6 tests
+      run:
+        image: grafana/k6:latest
+        shell: k6 run k6.js --iterations 100
+    # Logs of steps are automatically stored whereas artifacts will require an explicit step.
+    # You can give us the location of the artifacts and Testkube takes care of the rest.
+    - name: Saving artifacts
+      artifacts:
+        paths: ["junit.xml"]
