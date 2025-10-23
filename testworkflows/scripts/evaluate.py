@@ -6,7 +6,6 @@ import os
 from argparse import ArgumentError
 from logging import Logger
 from typing import Any
-from dotenv import load_dotenv
 from datasets import Dataset
 from langchain_openai import ChatOpenAI
 from ragas import evaluate
@@ -197,20 +196,10 @@ def main(
         model: Model name to use for evaluation
         metrics: List of metric names to calculate
     """
-    # Load environment variables
-    load_dotenv()
 
     # Check if any metrics were provided
     if metrics is None:
         raise ArgumentError("No metrics were provided as arguments")
-
-    # Initialize the LLM for RAGAS evaluation
-    # Using Google Generative AI (Gemini) via API key
-    api_key = os.getenv("GOOGLE_API_KEY")
-    if not api_key:
-        raise ValueError("GOOGLE_API_KEY not found in environment variables")
-
-
 
     # Create LLM client using the AI Gateway (environment variables 'OPEN_API_KEY' and 'OPENAI_API_BASE' need to be set)
     ragas_llm = ChatOpenAI(
