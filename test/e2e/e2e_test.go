@@ -257,7 +257,7 @@ var _ = Describe("Manager", Ordered, func() {
 		})
 
 		// Uncomment when using webhooks
-		//It("should provisioned cert-manager", func() {
+		// It("should provisioned cert-manager", func() {
 		//	By("validating that cert-manager has the certificate Secret")
 		//	verifyCertManager := func(g Gomega) {
 		//		cmd := exec.Command("kubectl", "get", "secrets", "webhook-server-cert", "-n", namespace)
@@ -265,10 +265,10 @@ var _ = Describe("Manager", Ordered, func() {
 		//		g.Expect(err).NotTo(HaveOccurred())
 		//	}
 		//	Eventually(verifyCertManager).Should(Succeed())
-		//})
+		// })
 
 		// Uncomment when using mutating webhooks
-		//It("should have CA injection for mutating webhooks", func() {
+		// It("should have CA injection for mutating webhooks", func() {
 		//	By("checking CA injection for mutating webhooks")
 		//	verifyCAInjection := func(g Gomega) {
 		//		cmd := exec.Command("kubectl", "get",
@@ -280,10 +280,10 @@ var _ = Describe("Manager", Ordered, func() {
 		//		g.Expect(len(mwhOutput)).To(BeNumerically(">", 10))
 		//	}
 		//	Eventually(verifyCAInjection).Should(Succeed())
-		//})
+		// })
 
 		// Uncomment when using validation webhooks
-		//It("should have CA injection for validating webhooks", func() {
+		// It("should have CA injection for validating webhooks", func() {
 		//	By("checking CA injection for validating webhooks")
 		//	verifyCAInjection := func(g Gomega) {
 		//		cmd := exec.Command("kubectl", "get",
@@ -295,7 +295,7 @@ var _ = Describe("Manager", Ordered, func() {
 		//		g.Expect(len(vwhOutput)).To(BeNumerically(">", 10))
 		//	}
 		//	Eventually(verifyCAInjection).Should(Succeed())
-		//})
+		// })
 
 		// +kubebuilder:scaffold:e2e-webhooks-checks
 	})
