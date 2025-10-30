@@ -28,6 +28,21 @@ jobs:
         run: |
           make docker-buildx
 
+      - name: 'Set up Docker Buildx'
+        uses: docker/setup-buildx-action@v3
+
+      - name: 'Build & Push TestWorkflows Image'
+        uses: docker/build-push-action@v5
+        with:
+          context: ./testworkflows
+          file: ./testworkflows/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/agentic-layer/testbench-operator/testworkflows:${{ github.ref_name }}
+            ghcr.io/agentic-layer/testbench-operator/testworkflows:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
       - name: 'Setup Flux CLI'
         uses: fluxcd/flux2/action@main
 
