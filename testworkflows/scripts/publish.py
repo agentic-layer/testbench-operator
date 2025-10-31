@@ -5,6 +5,10 @@ from logging import Logger
 from typing import Any
 from prometheus_client import CollectorRegistry, Gauge, push_to_gateway
 
+# Set up module-level logger
+logging.basicConfig(level=logging.INFO)
+logger: Logger = logging.getLogger(__name__)
+
 
 def get_overall_scores(file_path: str) -> dict[str, Any]:
     """Load the evaluation_scores.json file and return the 'overall_scores' metrics."""
@@ -90,20 +94,16 @@ def publish_metrics(
 
 if __name__ == "__main__":
     """
-    Main function to publish Prometheus metrics to Prometheus Pushgateway.     
+    Main function to publish Prometheus metrics to Prometheus Pushgateway.
 
     Args:
         workflow_name: Name of the test workflow
         pushgateway_url: (OPTIONAL) URL to the Prometheus Pushgateway (default: localhost:9091)
 
     Examples:
-            python3 scripts/publish.py weather-assistant-test 
+            python3 scripts/publish.py weather-assistant-test
             python3 scripts/publish.py weather-assistant-test pushgateway-url.com
     """
-
-    # Set up logger & get logger instance
-    logging.basicConfig(level=logging.INFO)
-    logger: Logger = logging.getLogger(__name__)
 
     parser = argparse.ArgumentParser(
         description = "Publish RAGAS evaluation metrics to Prometheus Pushgateway"
