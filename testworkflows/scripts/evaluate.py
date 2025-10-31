@@ -16,6 +16,10 @@ from ragas.metrics import Metric
 import ragas.metrics as metrics_module
 from langchain_google_genai import ChatGoogleGenerativeAI
 
+# Set up module-level logger
+logging.basicConfig(level=logging.INFO)
+logger: Logger = logging.getLogger(__name__)
+
 
 def get_available_metrics() -> dict[str, Metric]:
     """
@@ -139,6 +143,7 @@ def main(
         metrics: List of metric names to calculate
     """
 
+    # Create LLM client using the proxy
     ragas_llm = ChatOpenAI(
         model=model
     )
@@ -166,10 +171,6 @@ def main(
 
 
 if __name__ == "__main__":
-    # Set up logger & get logger instance
-    logging.basicConfig(level=logging.INFO)
-    logger: Logger = logging.getLogger(__name__)
-
     # Parse the parameters (model and metrics) evaluate.py was called with
     parser = argparse.ArgumentParser(
         description = "Evaluate results using RAGAS metrics",

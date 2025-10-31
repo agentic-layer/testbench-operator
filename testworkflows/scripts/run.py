@@ -18,6 +18,10 @@ from a2a.types import (
     Message, AgentCard,
 )
 
+# Set up module-level logger
+logging.basicConfig(level=logging.INFO)
+logger: Logger = logging.getLogger(__name__)
+
 async def initialize_client(agent_url: str, httpx_client: httpx.AsyncClient, logger: Logger) -> Client:
     """Initialize the A2A client with a minimal agent card."""
     logger.info(f'Initializing A2A client for: {agent_url}')
@@ -46,8 +50,6 @@ async def run_agent_experiment(row, agent_url: str) -> dict[str, str | list | li
     Returns:
         Dictionary with original row data plus 'response'
     """
-    logger: Logger = logging.getLogger(__name__)
-
     output_text: str = ""
 
     try:
@@ -104,10 +106,6 @@ async def run_agent_experiment(row, agent_url: str) -> dict[str, str | list | li
 
 async def main(agent_url: str) -> None:
     """Main function to load Ragas Dataset and run Experiment."""
-
-    # Set up logger & get logger instance
-    logging.basicConfig(level=logging.INFO)
-    logger: Logger = logging.getLogger(__name__)
 
     # Load existing Ragas dataset
     logger.info('Loading Ragas dataset from data/datasets/ragas_dataset.jsonl')
