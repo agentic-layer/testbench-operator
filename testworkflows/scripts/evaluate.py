@@ -51,17 +51,15 @@ def get_available_metrics() -> dict[str, Metric]:
 AVAILABLE_METRICS = get_available_metrics()
 
 
-def calculate_metrics(dataset: EvaluationDataset, metrics: list[str], llm: Any) -> dict[str, Any]:
+def convert_metrics(metrics: list[str]) -> list:
     """
-    Calculate RAGAS metrics on the dataset.
+    Map metric names to actual metric objects
 
     Args:
-        dataset: Ragas EvaluationDataset
         metrics: List of metric names as strings (e.g., ["faithfulness", "answer_relevancy"])
-        llm: Language model for evaluation
 
     Returns:
-        Dictionary containing evaluation results
+        List containing metric objects
     """
 
     # Map metric names to actual metric objects
@@ -76,15 +74,7 @@ def calculate_metrics(dataset: EvaluationDataset, metrics: list[str], llm: Any) 
     if not metric_objects:
         raise ValueError("No valid metrics provided for evaluation")
 
-    # Run RAGAS evaluation
-    result = evaluate(
-        dataset=dataset,
-        metrics=metric_objects,
-        llm=llm,
-        token_usage_parser=get_token_usage_for_openai,
-    )
-
-    return result
+    return metric_objects
 
 
 @dataclass
@@ -171,7 +161,12 @@ def main(
 
     # Calculate metrics
     logger.info(f"Calculating metrics: {', '.join(metrics)}...")
-    ragas_result = calculate_metrics(dataset, metrics, llm)
+    ragas_result = evaluate(
+        dataset=dataset,
+        metrics=convert_metrics(metrics),
+        llm=llm,
+        token_usage_parser=get_token_usage_for_openai,
+    )
 
     # Format results
     logger.info("Formatting evaluation scores...")
