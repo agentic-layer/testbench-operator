@@ -1,0 +1,35 @@
+name: Test Testworkflows
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-testworkflows:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: testworkflows
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install uv
+      run: |
+        curl -LsSf https://astral.sh/uv/install.sh | sh
+        echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+    - name: Sync dependencies with uv
+      run: uv sync
+
+    - name: Run pytest (skip E2E tests)
+      run: uv run pytest tests/ -v --ignore=tests/test_e2e.py

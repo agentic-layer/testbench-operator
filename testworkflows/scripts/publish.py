@@ -2,7 +2,6 @@ import argparse
 import json
 import logging
 from logging import Logger
-from typing import Any
 from prometheus_client import CollectorRegistry, Gauge, push_to_gateway
 
 # Set up module-level logger
@@ -10,7 +9,7 @@ logging.basicConfig(level=logging.INFO)
 logger: Logger = logging.getLogger(__name__)
 
 
-def get_overall_scores(file_path: str) -> dict[str, Any]:
+def get_overall_scores(file_path: str) -> dict[str, float]:
     """Load the evaluation_scores.json file and return the 'overall_scores' metrics."""
     with open(file_path, 'r') as file:
         return json.load(file).get("overall_scores", {})
@@ -43,7 +42,7 @@ def create_and_push_metrics(
 
         # Set the gauge value with the workflow_name label
         gauge.labels(workflow_name=workflow_name).set(score)
-        logger.info(f"Set metric 'evaluation_{metric_name}{{workflow_name=\"{workflow_name}\"}}' to {score}")
+        logger.info(f"Set metric 'ragas_evaluation_{metric_name}{{workflow_name=\"{workflow_name}\"}}' to {score}")
 
 
     # Push metrics to Pushgateway
@@ -58,6 +57,10 @@ def create_and_push_metrics(
     except Exception as e:
         logger.error(f"✗ Error pushing metrics to Pushgateway: {e}")
         raise
+
+    logger.info("Published metrics:")
+    for metric_name, score in overall_scores.items():
+        logger.info(f"  - ragas_evaluation_{metric_name}{{workflow_name=\"{workflow_name}\"}}: {score}")
 
 
 def publish_metrics(
@@ -86,10 +89,6 @@ def publish_metrics(
     logger.info(f"Creating Prometheus metrics for {len(overall_scores)} scores...")
     logger.info(f"Workflow: {workflow_name}")
     create_and_push_metrics(overall_scores, workflow_name, pushgateway_url)
-
-    logger.info("Published metrics:")
-    for metric_name, score in overall_scores.items():
-        logger.info(f"  - ragas_evaluation_{metric_name}{{workflow_name=\"{workflow_name}\"}}: {score}")
 
 
 if __name__ == "__main__":

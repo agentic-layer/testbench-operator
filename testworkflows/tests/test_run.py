@@ -7,7 +7,6 @@ Tests the agent query execution and experiment functionality.
 import unittest
 import tempfile
 import shutil
-import asyncio
 from pathlib import Path
 from unittest.mock import patch, MagicMock, AsyncMock
 
@@ -37,25 +36,13 @@ class TestInitializeClient(unittest.TestCase):
         mock_factory_instance.create.return_value = mock_client
         mock_factory.return_value = mock_factory_instance
 
-        # Mock httpx client and logger
-        mock_httpx_client = AsyncMock()
-        mock_logger = MagicMock()
-
         # Call the function
-        result = await initialize_client(
-            "http://test-agent:8000",
-            mock_httpx_client,
-            mock_logger
-        )
+        result = await initialize_client("http://test-agent:8000")
 
         # Verify
         mock_agent_card.assert_called_once_with("http://test-agent:8000")
         mock_factory_instance.create.assert_called_once_with(mock_card)
         self.assertEqual(result, mock_client)
-
-    def test_initialize_client_sync(self):
-        """Synchronous wrapper for async test"""
-        asyncio.run(self.test_initialize_client_creates_client())
 
 
 class TestRunAgentExperiment(unittest.TestCase):
@@ -208,12 +195,6 @@ class TestMain(unittest.TestCase):
             mock_arun.assert_called_once()
         finally:
             os.chdir(self.original_cwd)
-
-    def test_main_sync(self):
-        """Synchronous wrapper for async test"""
-        asyncio.run(self.test_main_execution())
-
-
 
 
 

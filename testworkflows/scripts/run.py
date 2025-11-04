@@ -1,7 +1,6 @@
 import asyncio
 import argparse
 import httpx
-import json
 
 import logging
 from logging import Logger
@@ -22,14 +21,15 @@ from a2a.types import (
 logging.basicConfig(level=logging.INFO)
 logger: Logger = logging.getLogger(__name__)
 
-async def initialize_client(agent_url: str, httpx_client: httpx.AsyncClient, logger: Logger) -> Client:
+
+async def initialize_client(agent_url: str) -> Client:
     """Initialize the A2A client with a minimal agent card."""
     logger.info(f'Initializing A2A client for: {agent_url}')
 
     # Create a minimal agent card with the provided URL
     agent_card: AgentCard = minimal_agent_card(agent_url)
 
-    config: ClientConfig = ClientConfig(httpx_client=httpx_client)
+    config: ClientConfig = ClientConfig()
     factory: ClientFactory = ClientFactory(config)
     client: Client = factory.create(agent_card)
 
@@ -39,7 +39,7 @@ async def initialize_client(agent_url: str, httpx_client: httpx.AsyncClient, log
 
 
 @experiment()
-async def run_agent_experiment(row, agent_url: str) -> dict[str, str | list | list]:
+async def run_agent_experiment(row, agent_url: str) -> dict[str, str | list]:
     """
     Experiment function that processes each row from the dataset.
 
@@ -50,11 +50,10 @@ async def run_agent_experiment(row, agent_url: str) -> dict[str, str | list | li
     Returns:
         Dictionary with original row data plus 'response'
     """
-    output_text: str = ""
 
     try:
-        async with httpx.AsyncClient() as httpx_client:
-            client = await initialize_client(agent_url, httpx_client, logger)
+        async with httpx.AsyncClient():
+            client = await initialize_client(agent_url)
 
             # Get the input from the row
             input_text = row.get("user_input")
@@ -78,16 +77,12 @@ async def run_agent_experiment(row, agent_url: str) -> dict[str, str | list | li
                     task, _ = response
                     if task:
                         artifacts: list = task.model_dump(mode='json', include={'artifacts'}).get('artifacts',[])
-                        history: list = task.model_dump(mode='json', include={'history'}).get('history',[])
 
                         # Extract the model response
                         if artifacts and artifacts[0].get('parts'):
                             output_text = artifacts[0]['parts'][0].get('text', '')
                         else:
                             logger.warning("No text found in artifacts")
-
-                elif hasattr(response, 'model_dump'):
-                    logger.debug(response.model_dump(mode='json', exclude_none=True))
                 else:
                     logger.warning(f'Unexpected response: {response}')
 

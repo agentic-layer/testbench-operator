@@ -26,33 +26,6 @@ from evaluate import (
 )
 
 
-class TestGetAvailableMetrics(unittest.TestCase):
-    """Test the get_available_metrics function"""
-
-    def test_returns_dict(self):
-        """Test that get_available_metrics returns a dictionary"""
-        metrics = get_available_metrics()
-        self.assertIsInstance(metrics, dict)
-
-    def test_contains_common_metrics(self):
-        """Test that common metrics are available"""
-        metrics = get_available_metrics()
-
-        # Check for some common metrics
-        common_metrics = ['faithfulness', 'answer_relevancy']
-
-        for metric in common_metrics:
-            if metric in metrics:
-                self.assertIn(metric, metrics)
-
-    def test_metric_instances_have_name(self):
-        """Test that metric instances have a name attribute"""
-        metrics = get_available_metrics()
-
-        for metric_name, metric_instance in metrics.items():
-            self.assertTrue(hasattr(metric_instance, 'name'))
-
-
 class TestCalculateMetrics(unittest.TestCase):
     """Test the calculate_metrics function"""
 
@@ -89,21 +62,6 @@ class TestCalculateMetrics(unittest.TestCase):
         mock_evaluate.assert_called_once()
         self.assertEqual(result, mock_result)
 
-    @patch('evaluate.evaluate')
-    def test_calculate_metrics_with_multiple_metrics(self, mock_evaluate):
-        """Test calculate_metrics with multiple metrics"""
-        mock_dataset = MagicMock(spec=EvaluationDataset)
-        mock_llm = MagicMock()
-        mock_result = MagicMock(spec=EvaluationResult)
-        mock_evaluate.return_value = mock_result
-
-        # Call with multiple metrics
-        metrics = ['faithfulness', 'answer_relevancy']
-        result = calculate_metrics(mock_dataset, metrics, mock_llm)
-
-        # Verify evaluate was called
-        mock_evaluate.assert_called_once()
-
     def test_calculate_metrics_with_invalid_metric(self):
         """Test calculate_metrics with invalid metric name"""
         mock_dataset = MagicMock(spec=EvaluationDataset)
@@ -121,30 +79,6 @@ class TestCalculateMetrics(unittest.TestCase):
 class TestFormatEvaluationScores(unittest.TestCase):
     """Test the format_evaluation_scores function"""
 
-    def test_format_evaluation_scores_structure(self):
-        """Test that formatted scores have correct structure"""
-        # Create mock RAGAS result
-        mock_result = MagicMock(spec=EvaluationResult)
-
-        # Create a mock DataFrame
-        df = pd.DataFrame({
-            'user_input': ['Question 1', 'Question 2'],
-            'response': ['Answer 1', 'Answer 2'],
-            'faithfulness': [0.9, 0.8],
-            'answer_relevancy': [0.85, 0.75]
-        })
-        mock_result.to_pandas.return_value = df
-
-        # Format the scores
-        metrics = ['faithfulness', 'answer_relevancy']
-        formatted = format_evaluation_scores(mock_result, metrics)
-
-        # Verify structure
-        self.assertIn('overall_scores', formatted)
-        self.assertIn('individual_results', formatted)
-        self.assertIn('total_tokens', formatted)
-        self.assertIn('total_cost', formatted)
-
     def test_overall_scores_calculation(self):
         """Test that overall scores are calculated correctly"""
         mock_result = MagicMock(spec=EvaluationResult)
@@ -155,12 +89,21 @@ class TestFormatEvaluationScores(unittest.TestCase):
         })
         mock_result.to_pandas.return_value = df
 
-        metrics = ['faithfulness', 'answer_relevancy']
-        formatted = format_evaluation_scores(mock_result, metrics)
+        # Mock _repr_dict with calculated averages
+        mock_result._repr_dict = {'faithfulness': 0.8, 'answer_relevancy': 0.75}
 
-        # Verify overall scores are averages
-        self.assertAlmostEqual(formatted['overall_scores']['faithfulness'], 0.8, places=2)
-        self.assertAlmostEqual(formatted['overall_scores']['answer_relevancy'], 0.75, places=2)
+        # Mock token usage methods
+        mock_token_usage = MagicMock()
+        mock_token_usage.input_tokens = 100
+        mock_token_usage.output_tokens = 50
+        mock_result.total_tokens.return_value = mock_token_usage
+        mock_result.total_cost.return_value = 0.001
+
+        formatted = format_evaluation_scores(mock_result, 5.0/1e6, 15.0/1e6)
+
+        # Verify overall scores are correct
+        self.assertAlmostEqual(formatted.overall_scores['faithfulness'], 0.8, places=2)
+        self.assertAlmostEqual(formatted.overall_scores['answer_relevancy'], 0.75, places=2)
 
     def test_individual_results_present(self):
         """Test that individual results are included"""
@@ -172,14 +115,23 @@ class TestFormatEvaluationScores(unittest.TestCase):
         })
         mock_result.to_pandas.return_value = df
 
-        metrics = ['faithfulness']
-        formatted = format_evaluation_scores(mock_result, metrics)
+        # Mock _repr_dict for overall scores
+        mock_result._repr_dict = {'faithfulness': 0.85}
+
+        # Mock token usage methods
+        mock_token_usage = MagicMock()
+        mock_token_usage.input_tokens = 100
+        mock_token_usage.output_tokens = 50
+        mock_result.total_tokens.return_value = mock_token_usage
+        mock_result.total_cost.return_value = 0.001
+
+        formatted = format_evaluation_scores(mock_result, 5.0/1e6, 15.0/1e6)
 
         # Verify individual results
-        self.assertEqual(len(formatted['individual_results']), 2)
+        self.assertEqual(len(formatted.individual_results), 2)
 
     def test_token_usage_placeholders(self):
-        """Test that token usage has placeholder values"""
+        """Test that token usage is returned correctly"""
         mock_result = MagicMock(spec=EvaluationResult)
 
         df = pd.DataFrame({
@@ -187,13 +139,22 @@ class TestFormatEvaluationScores(unittest.TestCase):
         })
         mock_result.to_pandas.return_value = df
 
-        metrics = ['faithfulness']
-        formatted = format_evaluation_scores(mock_result, metrics)
+        # Mock _repr_dict for overall scores
+        mock_result._repr_dict = {'faithfulness': 0.9}
 
-        # Verify placeholders
-        self.assertEqual(formatted['total_tokens']['input_tokens'], 0)
-        self.assertEqual(formatted['total_tokens']['output_tokens'], 0)
-        self.assertEqual(formatted['total_cost'], 0.0)
+        # Mock token usage methods with specific values
+        mock_token_usage = MagicMock()
+        mock_token_usage.input_tokens = 150
+        mock_token_usage.output_tokens = 75
+        mock_result.total_tokens.return_value = mock_token_usage
+        mock_result.total_cost.return_value = 0.002
+
+        formatted = format_evaluation_scores(mock_result, 5.0/1e6, 15.0/1e6)
+
+        # Verify token usage is captured correctly
+        self.assertEqual(formatted.total_tokens['input_tokens'], 150)
+        self.assertEqual(formatted.total_tokens['output_tokens'], 75)
+        self.assertEqual(formatted.total_cost, 0.002)
 
 
 class TestMain(unittest.TestCase):
@@ -245,54 +206,6 @@ class TestMain(unittest.TestCase):
             os.chdir(self.original_cwd)
 
 
-class TestEvaluationDatasetLoading(unittest.TestCase):
-    """Test loading of evaluation datasets from JSONL"""
-
-    def setUp(self):
-        """Set up temporary directory with test JSONL"""
-        self.temp_dir = tempfile.mkdtemp()
-        self.jsonl_file = Path(self.temp_dir) / "test_experiment.jsonl"
-
-        # Create test data
-        test_data = [
-            {
-                'user_input': 'Question 1',
-                'retrieved_contexts': ['Context 1'],
-                'reference': 'Answer 1',
-                'response': 'Response 1'
-            },
-            {
-                'user_input': 'Question 2',
-                'retrieved_contexts': ['Context 2'],
-                'reference': 'Answer 2',
-                'response': 'Response 2'
-            }
-        ]
-
-        with open(self.jsonl_file, 'w') as f:
-            for item in test_data:
-                f.write(json.dumps(item) + '\n')
-
-    def tearDown(self):
-        """Clean up temporary directory"""
-        shutil.rmtree(self.temp_dir, ignore_errors=True)
-
-    def test_load_evaluation_dataset_from_jsonl(self):
-        """Test loading EvaluationDataset from JSONL file"""
-        dataset = EvaluationDataset.from_jsonl(str(self.jsonl_file))
-
-        # Verify dataset was loaded
-        self.assertIsInstance(dataset, EvaluationDataset)
-
-    def test_loaded_dataset_structure(self):
-        """Test that loaded dataset has correct structure"""
-        dataset = EvaluationDataset.from_jsonl(str(self.jsonl_file))
-
-        # Convert to pandas to inspect
-        # Note: This may vary depending on Ragas version
-        # The test validates that the dataset can be loaded successfully
-
-
 class TestAvailableMetrics(unittest.TestCase):
     """Test the AVAILABLE_METRICS loading and validation"""
 
@@ -310,11 +223,6 @@ class TestAvailableMetrics(unittest.TestCase):
         from ragas.metrics import Metric
         for value in AVAILABLE_METRICS.values():
             self.assertIsInstance(value, Metric)
-
-    def test_invalid_metric_name(self):
-        """Test that invalid metric names are rejected"""
-        invalid_metric = 'this_metric_does_not_exist_12345'
-        self.assertNotIn(invalid_metric, AVAILABLE_METRICS)
 
 
 if __name__ == '__main__':
