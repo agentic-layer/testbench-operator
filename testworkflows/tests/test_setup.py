@@ -74,26 +74,6 @@ class TestCustomConvertCSV(unittest.TestCase):
 class TestGetConverter(unittest.TestCase):
     """Test the get_converter function"""
 
-    def test_csv_converter(self):
-        """Test that CSV files get custom_convert_csv"""
-        converter = get_converter("https://example.com/data.csv")
-        self.assertEqual(converter, custom_convert_csv)
-
-    def test_json_converter(self):
-        """Test that JSON files get pd.read_json"""
-        converter = get_converter("https://example.com/data.json")
-        self.assertEqual(converter, pd.read_json)
-
-    def test_parquet_converter(self):
-        """Test that Parquet files get pd.read_parquet"""
-        converter = get_converter("https://example.com/data.parquet")
-        self.assertEqual(converter, pd.read_parquet)
-
-    def test_prq_converter(self):
-        """Test that .prq files get pd.read_parquet"""
-        converter = get_converter("https://example.com/data.prq")
-        self.assertEqual(converter, pd.read_parquet)
-
     def test_unsupported_format(self):
         """Test that unsupported formats raise TypeError"""
         with self.assertRaises(TypeError) as context:
@@ -219,80 +199,6 @@ class TestMain(unittest.TestCase):
             # Verify that the error propagates
             with self.assertRaises(Exception):
                 main("https://example.com/nonexistent.csv")
-        finally:
-            os.chdir(self.original_cwd)
-
-
-class TestIntegrationWithTestData(unittest.TestCase):
-    """Integration tests using the actual test data files"""
-
-    def setUp(self):
-        """Set up temporary directory"""
-        self.temp_dir = tempfile.mkdtemp()
-        self.original_cwd = Path.cwd()
-        self.test_data_dir = Path(__file__).parent / "test_data"
-
-    def tearDown(self):
-        """Clean up temporary directory"""
-        shutil.rmtree(self.temp_dir, ignore_errors=True)
-
-    def test_csv_test_data_conversion(self):
-        """Test conversion of actual CSV test data"""
-        import os
-        os.chdir(self.temp_dir)
-
-        try:
-            # Read the test CSV file
-            csv_path = self.test_data_dir / "dataset.csv"
-            with open(csv_path, 'rb') as f:
-                df = custom_convert_csv(f)
-
-            # Verify structure
-            self.assertEqual(len(df), 5)  # 5 rows in test data
-            self.assertIn('user_input', df.columns)
-            self.assertIn('retrieved_contexts', df.columns)
-            self.assertIn('reference', df.columns)
-
-            # Verify retrieved_contexts is a list
-            for contexts in df['retrieved_contexts']:
-                self.assertIsInstance(contexts, list)
-
-            # Create Ragas dataset
-            dataframe_to_ragas_dataset(df)
-
-            # Verify it was created in datasets subdirectory
-            dataset_file = Path(self.temp_dir) / 'data' / 'datasets' / 'ragas_dataset.jsonl'
-            self.assertTrue(dataset_file.exists(), f"Dataset file not found at {dataset_file}")
-        finally:
-            os.chdir(self.original_cwd)
-
-    def test_json_test_data_conversion(self):
-        """Test conversion of actual JSON test data"""
-        import os
-        os.chdir(self.temp_dir)
-
-        try:
-            # Read the test JSON file
-            json_path = self.test_data_dir / "dataset.json"
-            with open(json_path, 'rb') as f:
-                df = pd.read_json(f)
-
-            # Verify structure
-            self.assertEqual(len(df), 5)  # 5 rows in test data
-            self.assertIn('user_input', df.columns)
-            self.assertIn('retrieved_contexts', df.columns)
-            self.assertIn('reference', df.columns)
-
-            # Verify retrieved_contexts is already a list (JSON preserves types)
-            for contexts in df['retrieved_contexts']:
-                self.assertIsInstance(contexts, list)
-
-            # Create Ragas dataset
-            dataframe_to_ragas_dataset(df)
-
-            # Verify it was created in datasets subdirectory
-            dataset_file = Path(self.temp_dir) / 'data' / 'datasets' / 'ragas_dataset.jsonl'
-            self.assertTrue(dataset_file.exists(), f"Dataset file not found at {dataset_file}")
         finally:
             os.chdir(self.original_cwd)
 

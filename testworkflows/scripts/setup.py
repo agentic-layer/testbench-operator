@@ -27,11 +27,15 @@ def dataframe_to_ragas_dataset(dataframe: DataFrame) -> None:
     dataset_samples = dataframe.to_dict(orient="records")
 
     # Create Ragas Dataset
-    dataset: Dataset[BaseModel] = Dataset(name="ragas_dataset", backend="local/jsonl", root_dir="./data")
+    dataset: Dataset[BaseModel] = Dataset(
+        name="ragas_dataset",
+        data=dataset_samples,
+        backend="local/jsonl",
+        root_dir="./data")
 
-    # Append all samples to the dataset
+    """# Append all samples to the dataset
     for sample in dataset_samples:
-        dataset.append(sample)
+        dataset.append(sample)"""
 
     # Save the dataset
     dataset.save()
