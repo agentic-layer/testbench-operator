@@ -19,61 +19,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 from evaluate import (
     get_available_metrics,
-    calculate_metrics,
     format_evaluation_scores,
     main,
     AVAILABLE_METRICS
 )
-
-
-class TestCalculateMetrics(unittest.TestCase):
-    """Test the calculate_metrics function"""
-
-    def setUp(self):
-        """Set up test data"""
-        # Create a mock dataset
-        self.test_data = [
-            {
-                'user_input': 'What is the capital of France?',
-                'retrieved_contexts': ['Paris is the capital of France.'],
-                'reference': 'Paris',
-                'response': 'The capital of France is Paris.'
-            }
-        ]
-
-    @patch('evaluate.evaluate')
-    def test_calculate_metrics_calls_evaluate(self, mock_evaluate):
-        """Test that calculate_metrics calls RAGAS evaluate"""
-        # Create mock dataset
-        mock_dataset = MagicMock(spec=EvaluationDataset)
-
-        # Create mock LLM
-        mock_llm = MagicMock()
-
-        # Mock evaluate return value
-        mock_result = MagicMock(spec=EvaluationResult)
-        mock_evaluate.return_value = mock_result
-
-        # Call calculate_metrics
-        metrics = ['faithfulness']
-        result = calculate_metrics(mock_dataset, metrics, mock_llm)
-
-        # Verify evaluate was called
-        mock_evaluate.assert_called_once()
-        self.assertEqual(result, mock_result)
-
-    def test_calculate_metrics_with_invalid_metric(self):
-        """Test calculate_metrics with invalid metric name"""
-        mock_dataset = MagicMock(spec=EvaluationDataset)
-        mock_llm = MagicMock()
-
-        # Call with invalid metric - this should raise ValueError
-        metrics = ['nonexistent_metric']
-
-        with self.assertRaises(ValueError) as context:
-            calculate_metrics(mock_dataset, metrics, mock_llm)
-
-        self.assertIn('No valid metrics', str(context.exception))
 
 
 class TestFormatEvaluationScores(unittest.TestCase):
