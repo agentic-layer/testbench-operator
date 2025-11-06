@@ -1,7 +1,7 @@
 """
 Unit tests for publish.py
 
-Tests the Prometheus metrics publishing functionality.
+Tests the OpenTelemetry OTLP metrics publishing functionality.
 """
 
 import json
@@ -55,78 +55,109 @@ class TestGetOverallScores(unittest.TestCase):
 class TestCreateAndPushMetrics(unittest.TestCase):
     """Test the create_and_push_metrics function"""
 
-    @patch("publish.push_to_gateway")
-    @patch("publish.Gauge")
-    def test_creates_gauges_for_each_metric(self, mock_gauge_class, mock_push):
+    @patch("publish.OTLPMetricExporter")
+    @patch("publish.MeterProvider")
+    @patch("publish.metrics.get_meter")
+    def test_creates_gauges_for_each_metric(self, mock_get_meter, mock_provider_class, mock_exporter_class):
         """Test that a Gauge is created for each metric"""
         overall_scores = {"faithfulness": 0.85, "answer_relevancy": 0.90}
 
-        # Mock the Gauge instances
-        mock_gauge_instance = MagicMock()
-        mock_gauge_class.return_value = mock_gauge_instance
+        # Mock the meter and gauge
+        mock_gauge = MagicMock()
+        mock_meter = MagicMock()
+        mock_meter.create_gauge.return_value = mock_gauge
+        mock_get_meter.return_value = mock_meter
+
+        # Mock the provider
+        mock_provider = MagicMock()
+        mock_provider_class.return_value = mock_provider
 
         create_and_push_metrics(
             overall_scores=overall_scores,
             workflow_name="test-workflow",
-            pushgateway_url="localhost:9091",
+            otlp_endpoint="localhost:4318",
         )
 
-        # Verify Gauge was called for each metric
-        self.assertEqual(mock_gauge_class.call_count, 2)
+        # Verify create_gauge was called for each metric
+        self.assertEqual(mock_meter.create_gauge.call_count, 2)
 
         # Verify gauge names
-        gauge_calls = mock_gauge_class.call_args_list
-        gauge_names = [call[0][0] for call in gauge_calls]
+        gauge_calls = mock_meter.create_gauge.call_args_list
+        gauge_names = [call[1]["name"] for call in gauge_calls]
         self.assertIn("ragas_evaluation_faithfulness", gauge_names)
         self.assertIn("ragas_evaluation_answer_relevancy", gauge_names)
 
-    @patch("publish.push_to_gateway")
-    @patch("publish.Gauge")
-    def test_sets_gauge_values(self, mock_gauge_class, mock_push):
+    @patch("publish.OTLPMetricExporter")
+    @patch("publish.MeterProvider")
+    @patch("publish.metrics.get_meter")
+    def test_sets_gauge_values(self, mock_get_meter, mock_provider_class, mock_exporter_class):
         """Test that gauge values are set correctly"""
         overall_scores = {"faithfulness": 0.85}
 
-        # Mock the Gauge instance and labels
-        mock_gauge_instance = MagicMock()
-        mock_labels = MagicMock()
-        mock_gauge_instance.labels.return_value = mock_labels
-        mock_gauge_class.return_value = mock_gauge_instance
+        # Mock the meter and gauge
+        mock_gauge = MagicMock()
+        mock_meter = MagicMock()
+        mock_meter.create_gauge.return_value = mock_gauge
+        mock_get_meter.return_value = mock_meter
+
+        # Mock the provider
+        mock_provider = MagicMock()
+        mock_provider_class.return_value = mock_provider
 
         create_and_push_metrics(
             overall_scores=overall_scores,
             workflow_name="test-workflow",
-            pushgateway_url="localhost:9091",
+            otlp_endpoint="localhost:4318",
         )
 
-        # Verify labels were set with workflow_name
-        mock_gauge_instance.labels.assert_called_with(workflow_name="test-workflow")
+        # Verify gauge.set was called with correct value and attributes
+        mock_gauge.set.assert_called_once_with(0.85, {"workflow_name": "test-workflow"})
 
-        # Verify gauge value was set
-        mock_labels.set.assert_called_with(0.85)
-
-    @patch("publish.push_to_gateway")
-    def test_pushes_to_gateway(self, mock_push):
-        """Test that metrics are pushed to Pushgateway"""
+    @patch("publish.OTLPMetricExporter")
+    @patch("publish.MeterProvider")
+    @patch("publish.metrics.get_meter")
+    def test_pushes_via_otlp(self, mock_get_meter, mock_provider_class, mock_exporter_class):
+        """Test that metrics are pushed via OTLP"""
         overall_scores = {"faithfulness": 0.85}
 
+        # Mock the meter and gauge
+        mock_gauge = MagicMock()
+        mock_meter = MagicMock()
+        mock_meter.create_gauge.return_value = mock_gauge
+        mock_get_meter.return_value = mock_meter
+
+        # Mock the provider
+        mock_provider = MagicMock()
+        mock_provider_class.return_value = mock_provider
+
         create_and_push_metrics(
             overall_scores=overall_scores,
             workflow_name="test-workflow",
-            pushgateway_url="localhost:9091",
+            otlp_endpoint="localhost:4318",
         )
 
-        # Verify push_to_gateway was called
-        mock_push.assert_called_once()
+        # Verify OTLPMetricExporter was initialized with correct endpoint
+        mock_exporter_class.assert_called_once_with(endpoint="http://localhost:4318/v1/metrics")
 
-        # Verify push parameters
-        call_args = mock_push.call_args
-        self.assertEqual(call_args[0][0], "localhost:9091")
-        self.assertEqual(call_args[1]["job"], "ragas_evaluation")
+        # Verify force_flush and shutdown were called
+        mock_provider.force_flush.assert_called_once()
+        mock_provider.shutdown.assert_called_once()
 
-    @patch("publish.push_to_gateway")
-    def test_handles_push_error(self, mock_push):
-        """Test error handling when push fails"""
-        mock_push.side_effect = Exception("Connection refused")
+    @patch("publish.OTLPMetricExporter")
+    @patch("publish.MeterProvider")
+    @patch("publish.metrics.get_meter")
+    def test_handles_push_error(self, mock_get_meter, mock_provider_class, mock_exporter_class):
+        """Test error handling when OTLP export fails"""
+        # Mock the provider to raise an exception on force_flush
+        mock_provider = MagicMock()
+        mock_provider.force_flush.side_effect = Exception("Connection refused")
+        mock_provider_class.return_value = mock_provider
+
+        # Mock the meter
+        mock_gauge = MagicMock()
+        mock_meter = MagicMock()
+        mock_meter.create_gauge.return_value = mock_gauge
+        mock_get_meter.return_value = mock_meter
 
         overall_scores = {"faithfulness": 0.85}
 
@@ -134,10 +165,13 @@ class TestCreateAndPushMetrics(unittest.TestCase):
             create_and_push_metrics(
                 overall_scores=overall_scores,
                 workflow_name="test-workflow",
-                pushgateway_url="localhost:9091",
+                otlp_endpoint="localhost:4318",
             )
 
         self.assertIn("Connection refused", str(context.exception))
+
+        # Verify shutdown is still called in finally block
+        mock_provider.shutdown.assert_called_once()
 
 
 class TestPublishMetrics(unittest.TestCase):
@@ -169,7 +203,7 @@ class TestPublishMetrics(unittest.TestCase):
         publish_metrics(
             input_file=str(self.test_file),
             workflow_name="test-workflow",
-            pushgateway_url="localhost:9091",
+            otlp_endpoint="localhost:4318",
         )
 
         # Verify create_and_push_metrics was called
@@ -180,7 +214,7 @@ class TestPublishMetrics(unittest.TestCase):
         self.assertEqual(call_args[0][0]["faithfulness"], 0.85)
         self.assertEqual(call_args[0][0]["answer_relevancy"], 0.90)
         self.assertEqual(call_args[0][1], "test-workflow")
-        self.assertEqual(call_args[0][2], "localhost:9091")
+        self.assertEqual(call_args[0][2], "localhost:4318")
 
     @patch("publish.create_and_push_metrics")
     def test_publish_metrics_with_empty_scores(self, mock_create_push):
@@ -195,7 +229,7 @@ class TestPublishMetrics(unittest.TestCase):
         publish_metrics(
             input_file=str(empty_file),
             workflow_name="test-workflow",
-            pushgateway_url="localhost:9091",
+            otlp_endpoint="localhost:4318",
         )
 
         # Verify create_and_push_metrics was NOT called
@@ -237,17 +271,32 @@ class TestIntegrationWithTestData(unittest.TestCase):
         """Clean up temporary directory"""
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
-    @patch("publish.push_to_gateway")
-    def test_publish_realistic_scores(self, mock_push):
+    @patch("publish.OTLPMetricExporter")
+    @patch("publish.MeterProvider")
+    @patch("publish.metrics.get_meter")
+    def test_publish_realistic_scores(self, mock_get_meter, mock_provider_class, mock_exporter_class):
         """Test publishing realistic evaluation scores"""
+        # Mock the meter and gauge
+        mock_gauge = MagicMock()
+        mock_meter = MagicMock()
+        mock_meter.create_gauge.return_value = mock_gauge
+        mock_get_meter.return_value = mock_meter
+
+        # Mock the provider
+        mock_provider = MagicMock()
+        mock_provider_class.return_value = mock_provider
+
         publish_metrics(
             input_file=str(self.test_file),
             workflow_name="weather-assistant-test",
-            pushgateway_url="localhost:9091",
+            otlp_endpoint="localhost:4318",
         )
 
-        # Verify push was called
-        mock_push.assert_called_once()
+        # Verify OTLPMetricExporter was called
+        mock_exporter_class.assert_called_once()
+
+        # Verify 4 metrics were created (faithfulness, answer_relevancy, context_precision, context_recall)
+        self.assertEqual(mock_meter.create_gauge.call_count, 4)
 
 
 if __name__ == "__main__":

@@ -9,6 +9,7 @@ import shutil
 import sys
 import tempfile
 import unittest
+from argparse import ArgumentError
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -132,7 +133,7 @@ class TestMain(unittest.TestCase):
         try:
             # When metrics is None, the function should raise an error
             # The actual error type depends on implementation
-            with self.assertRaises((TypeError, AttributeError)):
+            with self.assertRaises((ArgumentError)):
                 main(
                     output_file="results/evaluation_scores.json",
                     model="gemini-flash-latest",
