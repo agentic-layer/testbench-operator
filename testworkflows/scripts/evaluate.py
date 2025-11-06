@@ -77,6 +77,7 @@ def convert_metrics(metrics: list[str]) -> list:
 @dataclass
 class EvaluationScores:
     """Evaluation scores and results."""
+
     overall_scores: dict[str, float]
     individual_results: list[dict[str, Any]]
     total_tokens: dict[str, int]
@@ -88,7 +89,6 @@ def format_evaluation_scores(
     cost_per_input_token: float,
     cost_per_output_token: float,
 ) -> EvaluationScores:
-
     """
     Format the RAGAS evaluation results.
 
@@ -109,30 +109,31 @@ def format_evaluation_scores(
 
     # Extract token usage and calculate cost using TokenUsageParser
     # Check if token usage data was collected (some metrics don't use LLMs or use separate LLM instances)
-    if ragas_result.cost_cb and hasattr(ragas_result.cost_cb, 'usage_data') and ragas_result.cost_cb.usage_data:
+    if (
+        ragas_result.cost_cb
+        and hasattr(ragas_result.cost_cb, "usage_data")
+        and ragas_result.cost_cb.usage_data
+    ):
         token_usage = ragas_result.total_tokens()
         total_tokens = {
             "input_tokens": token_usage.input_tokens,
-            "output_tokens": token_usage.output_tokens
+            "output_tokens": token_usage.output_tokens,
         }
         total_cost = ragas_result.total_cost(
             cost_per_input_token=cost_per_input_token,
-            cost_per_output_token=cost_per_output_token
+            cost_per_output_token=cost_per_output_token,
         )
     else:
         # No token usage data collected (e.g., non-LLM metrics or Nvidia metrics using separate LLM instances)
         logger.info("No token usage data collected for these metrics")
-        total_tokens = {
-            "input_tokens": 0,
-            "output_tokens": 0
-        }
+        total_tokens = {"input_tokens": 0, "output_tokens": 0}
         total_cost = 0.0
 
     return EvaluationScores(
         overall_scores=overall_scores,
         individual_results=individual_results,
         total_tokens=total_tokens,
-        total_cost=total_cost
+        total_cost=total_cost,
     )
 
 
@@ -141,7 +142,7 @@ def main(
     model: str,
     metrics: list[str] = None,
     cost_per_input_token: float = 5.0 / 1e6,
-    cost_per_output_token: float = 15.0 / 1e6
+    cost_per_output_token: float = 15.0 / 1e6,
 ) -> None:
     """
     Main function to evaluate results using RAGAS metrics.
@@ -156,12 +157,10 @@ def main(
         raise ArgumentError("No metrics were provided as arguments")
 
     # Create LLM client using the AI-Gateway
-    ragas_llm = ChatOpenAI(
-        model=model
-    )
+    ragas_llm = ChatOpenAI(model=model)
     llm = LangchainLLMWrapper(ragas_llm)
 
-    dataset = EvaluationDataset.from_jsonl('data/experiments/ragas_experiment.jsonl')
+    dataset = EvaluationDataset.from_jsonl("data/experiments/ragas_experiment.jsonl")
 
     # Calculate metrics
     logger.info(f"Calculating metrics: {', '.join(metrics)}...")
@@ -177,14 +176,14 @@ def main(
     evaluation_scores = format_evaluation_scores(
         ragas_result,
         cost_per_input_token=cost_per_input_token,
-        cost_per_output_token=cost_per_output_token
+        cost_per_output_token=cost_per_output_token,
     )
 
     # Ensure output directory exists
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
 
     # Save to file
-    with open(output_file, 'w') as f:
+    with open(output_file, "w") as f:
         json.dump(asdict(evaluation_scores), f, indent=2)
 
     logger.info(f"Evaluation scores saved to {output_file}")
@@ -194,51 +193,51 @@ def main(
 if __name__ == "__main__":
     # Parse the parameters (model and metrics) evaluate.py was called with
     parser = argparse.ArgumentParser(
-        description = "Evaluate results using RAGAS metrics",
-        formatter_class = argparse.RawDescriptionHelpFormatter,
+        description="Evaluate results using RAGAS metrics",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=f"""
-            Available metrics: {', '.join(AVAILABLE_METRICS.keys())}
+            Available metrics: {", ".join(AVAILABLE_METRICS.keys())}
 
             Examples:
             python3 scripts/evaluate.py gemini-flash-latest faithfulness
             python3 scripts/evaluate.py gemini-flash-latest faithfulness context_precision context_recall
-        """
+        """,
     )
 
     parser.add_argument(
-        'model',
-        type = str,
-        help = 'Model name to use for evaluation (e.g., gemini-flash-latest)'
+        "model",
+        type=str,
+        help="Model name to use for evaluation (e.g., gemini-flash-latest)",
     )
 
     parser.add_argument(
-        'metrics',
-        nargs = '+',
-        choices = list(AVAILABLE_METRICS.keys()),
-        help = 'At least one (or more) metrics to evaluate (e.g., faithfulness, answer_relevancy)'
+        "metrics",
+        nargs="+",
+        choices=list(AVAILABLE_METRICS.keys()),
+        help="At least one (or more) metrics to evaluate (e.g., faithfulness, answer_relevancy)",
     )
 
     parser.add_argument(
-        '--cost-per-input',
-        type = float,
-        default = 5.0 / 1e6,
-        help = 'Cost per input token (default: 5.0/1M = $0.000005 for typical GPT-4 pricing)'
+        "--cost-per-input",
+        type=float,
+        default=5.0 / 1e6,
+        help="Cost per input token (default: 5.0/1M = $0.000005 for typical GPT-4 pricing)",
     )
 
     parser.add_argument(
-        '--cost-per-output',
-        type = float,
-        default = 15.0 / 1e6,
-        help = 'Cost per output token (default: 15.0/1M = $0.000015 for typical GPT-4 pricing)'
+        "--cost-per-output",
+        type=float,
+        default=15.0 / 1e6,
+        help="Cost per output token (default: 15.0/1M = $0.000015 for typical GPT-4 pricing)",
     )
 
     args = parser.parse_args()
 
     # Run evaluation with the 'model' and 'metrics' provided as parameters, 'output_file' is hardcoded
     main(
-        output_file = "results/evaluation_scores.json",
-        model = args.model,
-        metrics = args.metrics,
-        cost_per_input_token = args.cost_per_input,
-        cost_per_output_token = args.cost_per_output
+        output_file="results/evaluation_scores.json",
+        model=args.model,
+        metrics=args.metrics,
+        cost_per_input_token=args.cost_per_input,
+        cost_per_output_token=args.cost_per_output,
     )

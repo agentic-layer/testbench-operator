@@ -9,20 +9,16 @@ import tempfile
 import shutil
 import json
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock
 
-from ragas.dataset_schema import EvaluationDataset, EvaluationResult
+from ragas.dataset_schema import EvaluationResult
 import pandas as pd
 
 import sys
+
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from evaluate import (
-    get_available_metrics,
-    format_evaluation_scores,
-    main,
-    AVAILABLE_METRICS
-)
+from evaluate import format_evaluation_scores, main, AVAILABLE_METRICS
 
 
 class TestFormatEvaluationScores(unittest.TestCase):
@@ -32,14 +28,13 @@ class TestFormatEvaluationScores(unittest.TestCase):
         """Test that overall scores are calculated correctly"""
         mock_result = MagicMock(spec=EvaluationResult)
 
-        df = pd.DataFrame({
-            'faithfulness': [0.9, 0.8, 0.7],
-            'answer_relevancy': [0.85, 0.75, 0.65]
-        })
+        df = pd.DataFrame(
+            {"faithfulness": [0.9, 0.8, 0.7], "answer_relevancy": [0.85, 0.75, 0.65]}
+        )
         mock_result.to_pandas.return_value = df
 
         # Mock _repr_dict with calculated averages
-        mock_result._repr_dict = {'faithfulness': 0.8, 'answer_relevancy': 0.75}
+        mock_result._repr_dict = {"faithfulness": 0.8, "answer_relevancy": 0.75}
 
         # Mock token usage methods
         mock_token_usage = MagicMock()
@@ -48,24 +43,23 @@ class TestFormatEvaluationScores(unittest.TestCase):
         mock_result.total_tokens.return_value = mock_token_usage
         mock_result.total_cost.return_value = 0.001
 
-        formatted = format_evaluation_scores(mock_result, 5.0/1e6, 15.0/1e6)
+        formatted = format_evaluation_scores(mock_result, 5.0 / 1e6, 15.0 / 1e6)
 
         # Verify overall scores are correct
-        self.assertAlmostEqual(formatted.overall_scores['faithfulness'], 0.8, places=2)
-        self.assertAlmostEqual(formatted.overall_scores['answer_relevancy'], 0.75, places=2)
+        self.assertAlmostEqual(formatted.overall_scores["faithfulness"], 0.8, places=2)
+        self.assertAlmostEqual(
+            formatted.overall_scores["answer_relevancy"], 0.75, places=2
+        )
 
     def test_individual_results_present(self):
         """Test that individual results are included"""
         mock_result = MagicMock(spec=EvaluationResult)
 
-        df = pd.DataFrame({
-            'user_input': ['Q1', 'Q2'],
-            'faithfulness': [0.9, 0.8]
-        })
+        df = pd.DataFrame({"user_input": ["Q1", "Q2"], "faithfulness": [0.9, 0.8]})
         mock_result.to_pandas.return_value = df
 
         # Mock _repr_dict for overall scores
-        mock_result._repr_dict = {'faithfulness': 0.85}
+        mock_result._repr_dict = {"faithfulness": 0.85}
 
         # Mock token usage methods
         mock_token_usage = MagicMock()
@@ -74,7 +68,7 @@ class TestFormatEvaluationScores(unittest.TestCase):
         mock_result.total_tokens.return_value = mock_token_usage
         mock_result.total_cost.return_value = 0.001
 
-        formatted = format_evaluation_scores(mock_result, 5.0/1e6, 15.0/1e6)
+        formatted = format_evaluation_scores(mock_result, 5.0 / 1e6, 15.0 / 1e6)
 
         # Verify individual results
         self.assertEqual(len(formatted.individual_results), 2)
@@ -83,13 +77,11 @@ class TestFormatEvaluationScores(unittest.TestCase):
         """Test that token usage is returned correctly"""
         mock_result = MagicMock(spec=EvaluationResult)
 
-        df = pd.DataFrame({
-            'faithfulness': [0.9]
-        })
+        df = pd.DataFrame({"faithfulness": [0.9]})
         mock_result.to_pandas.return_value = df
 
         # Mock _repr_dict for overall scores
-        mock_result._repr_dict = {'faithfulness': 0.9}
+        mock_result._repr_dict = {"faithfulness": 0.9}
 
         # Mock token usage methods with specific values
         mock_token_usage = MagicMock()
@@ -98,11 +90,11 @@ class TestFormatEvaluationScores(unittest.TestCase):
         mock_result.total_tokens.return_value = mock_token_usage
         mock_result.total_cost.return_value = 0.002
 
-        formatted = format_evaluation_scores(mock_result, 5.0/1e6, 15.0/1e6)
+        formatted = format_evaluation_scores(mock_result, 5.0 / 1e6, 15.0 / 1e6)
 
         # Verify token usage is captured correctly
-        self.assertEqual(formatted.total_tokens['input_tokens'], 150)
-        self.assertEqual(formatted.total_tokens['output_tokens'], 75)
+        self.assertEqual(formatted.total_tokens["input_tokens"], 150)
+        self.assertEqual(formatted.total_tokens["output_tokens"], 75)
         self.assertEqual(formatted.total_cost, 0.002)
 
 
@@ -121,25 +113,25 @@ class TestMain(unittest.TestCase):
         self.experiment_file = self.experiment_dir / "ragas_experiment.jsonl"
         test_data = [
             {
-                'user_input': 'What is the weather?',
-                'retrieved_contexts': ['Context about weather'],
-                'reference': 'Expected answer',
-                'response': 'The weather is sunny.'
+                "user_input": "What is the weather?",
+                "retrieved_contexts": ["Context about weather"],
+                "reference": "Expected answer",
+                "response": "The weather is sunny.",
             }
         ]
 
-        with open(self.experiment_file, 'w') as f:
+        with open(self.experiment_file, "w") as f:
             for item in test_data:
-                f.write(json.dumps(item) + '\n')
+                f.write(json.dumps(item) + "\n")
 
     def tearDown(self):
         """Clean up temporary directory"""
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
-
     def test_main_no_metrics(self):
         """Test main function with no metrics provided"""
         import os
+
         os.chdir(self.temp_dir)
 
         try:
@@ -149,7 +141,7 @@ class TestMain(unittest.TestCase):
                 main(
                     output_file="results/evaluation_scores.json",
                     model="gemini-flash-latest",
-                    metrics=None
+                    metrics=None,
                 )
         finally:
             os.chdir(self.original_cwd)
@@ -170,9 +162,10 @@ class TestAvailableMetrics(unittest.TestCase):
 
         # All values should be Metric instances
         from ragas.metrics import Metric
+
         for value in AVAILABLE_METRICS.values():
             self.assertIsInstance(value, Metric)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

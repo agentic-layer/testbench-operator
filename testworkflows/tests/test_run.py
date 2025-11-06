@@ -10,10 +10,9 @@ import shutil
 from pathlib import Path
 from unittest.mock import patch, MagicMock, AsyncMock
 
-from pydantic import BaseModel
-from ragas import Dataset
 
 import sys
+
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 from run import initialize_client, run_agent_experiment, main
@@ -22,9 +21,11 @@ from run import initialize_client, run_agent_experiment, main
 class TestInitializeClient(unittest.TestCase):
     """Test the initialize_client function"""
 
-    @patch('run.ClientFactory')
-    @patch('run.minimal_agent_card')
-    async def test_initialize_client_creates_client(self, mock_agent_card, mock_factory):
+    @patch("run.ClientFactory")
+    @patch("run.minimal_agent_card")
+    async def test_initialize_client_creates_client(
+        self, mock_agent_card, mock_factory
+    ):
         """Test that initialize_client creates a client correctly"""
         # Mock the agent card
         mock_card = MagicMock()
@@ -57,9 +58,11 @@ class TestRunAgentExperiment(unittest.TestCase):
         """Clean up temporary directory"""
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
-    @patch('run.logging.getLogger')
-    @patch('run.initialize_client')
-    async def test_run_agent_experiment_success(self, mock_init_client, mock_get_logger):
+    @patch("run.logging.getLogger")
+    @patch("run.initialize_client")
+    async def test_run_agent_experiment_success(
+        self, mock_init_client, mock_get_logger
+    ):
         """Test successful agent query execution"""
         # Mock logger
         mock_logger = MagicMock()
@@ -71,10 +74,8 @@ class TestRunAgentExperiment(unittest.TestCase):
         # Create a mock task response
         mock_task = MagicMock()
         mock_task.model_dump.return_value = {
-            'artifacts': [{
-                'parts': [{'text': 'Agent response text'}]
-            }],
-            'history': []
+            "artifacts": [{"parts": [{"text": "Agent response text"}]}],
+            "history": [],
         }
 
         # Mock the async generator returned by send_message
@@ -86,13 +87,13 @@ class TestRunAgentExperiment(unittest.TestCase):
 
         # Create test row
         test_row = {
-            'user_input': 'What is the weather?',
-            'retrieved_contexts': ['Context about weather'],
-            'reference': 'Expected answer'
+            "user_input": "What is the weather?",
+            "retrieved_contexts": ["Context about weather"],
+            "reference": "Expected answer",
         }
 
         # Mock httpx AsyncClient
-        with patch('run.httpx.AsyncClient') as mock_httpx:
+        with patch("run.httpx.AsyncClient") as mock_httpx:
             mock_httpx_instance = AsyncMock()
             mock_httpx_instance.__aenter__.return_value = mock_httpx_instance
             mock_httpx_instance.__aexit__.return_value = None
@@ -104,20 +105,19 @@ class TestRunAgentExperiment(unittest.TestCase):
 
             # Call the function
             result = await test_experiment_func(
-                test_row,
-                agent_url="http://test-agent:8000"
+                test_row, agent_url="http://test-agent:8000"
             )
 
         # Verify result structure
-        self.assertIn('user_input', result)
-        self.assertIn('retrieved_contexts', result)
-        self.assertIn('reference', result)
-        self.assertIn('response', result)
-        self.assertEqual(result['user_input'], 'What is the weather?')
-        self.assertEqual(result['response'], 'Agent response text')
+        self.assertIn("user_input", result)
+        self.assertIn("retrieved_contexts", result)
+        self.assertIn("reference", result)
+        self.assertIn("response", result)
+        self.assertEqual(result["user_input"], "What is the weather?")
+        self.assertEqual(result["response"], "Agent response text")
 
-    @patch('run.logging.getLogger')
-    @patch('run.initialize_client')
+    @patch("run.logging.getLogger")
+    @patch("run.initialize_client")
     async def test_run_agent_experiment_error(self, mock_init_client, mock_get_logger):
         """Test agent query with error handling"""
         # Mock logger
@@ -129,13 +129,13 @@ class TestRunAgentExperiment(unittest.TestCase):
 
         # Create test row
         test_row = {
-            'user_input': 'What is the weather?',
-            'retrieved_contexts': ['Context'],
-            'reference': 'Answer'
+            "user_input": "What is the weather?",
+            "retrieved_contexts": ["Context"],
+            "reference": "Answer",
         }
 
         # Mock httpx AsyncClient
-        with patch('run.httpx.AsyncClient') as mock_httpx:
+        with patch("run.httpx.AsyncClient") as mock_httpx:
             mock_httpx_instance = AsyncMock()
             mock_httpx_instance.__aenter__.return_value = mock_httpx_instance
             mock_httpx_instance.__aexit__.return_value = None
@@ -147,14 +147,14 @@ class TestRunAgentExperiment(unittest.TestCase):
 
             # Call the function
             result = await test_experiment_func(
-                test_row,
-                agent_url="http://test-agent:8000"
+                test_row, agent_url="http://test-agent:8000"
             )
 
         # Verify error is captured in response
-        self.assertIn('response', result)
-        self.assertIn('ERROR', result['response'])
-        self.assertIn('Connection failed', result['response'])
+        self.assertIn("response", result)
+        self.assertIn("ERROR", result["response"])
+        self.assertIn("Connection failed", result["response"])
+
 
 class TestMain(unittest.TestCase):
     """Test the main function"""
@@ -168,11 +168,12 @@ class TestMain(unittest.TestCase):
         """Clean up temporary directory"""
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
-    @patch('run.run_agent_experiment.arun')
-    @patch('run.Dataset.load')
+    @patch("run.run_agent_experiment.arun")
+    @patch("run.Dataset.load")
     async def test_main_execution(self, mock_dataset_load, mock_arun):
         """Test main function execution flow"""
         import os
+
         os.chdir(self.temp_dir)
 
         try:
@@ -197,7 +198,5 @@ class TestMain(unittest.TestCase):
             os.chdir(self.original_cwd)
 
 
-
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
