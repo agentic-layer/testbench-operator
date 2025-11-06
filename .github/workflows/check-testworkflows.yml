@@ -16,6 +16,11 @@ on:
 jobs:
   check-backend:
     runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: testworkflows
+
     steps:
       - name: Checkout
         uses: 'actions/checkout@v5'
