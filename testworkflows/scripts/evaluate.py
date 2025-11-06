@@ -114,15 +114,25 @@ def format_evaluation_scores(
     individual_results = ragas_result.to_pandas().to_dict(orient="records")
 
     # Extract token usage and calculate cost using TokenUsageParser
-    token_usage = ragas_result.total_tokens()
-    total_tokens = {
-        "input_tokens": token_usage.input_tokens,
-        "output_tokens": token_usage.output_tokens
-    }
-    total_cost = ragas_result.total_cost(
-        cost_per_input_token=cost_per_input_token,
-        cost_per_output_token=cost_per_output_token
-    )
+    # Check if token usage data was collected (some metrics don't use LLMs or use separate LLM instances)
+    if ragas_result.cost_cb and hasattr(ragas_result.cost_cb, 'usage_data') and ragas_result.cost_cb.usage_data:
+        token_usage = ragas_result.total_tokens()
+        total_tokens = {
+            "input_tokens": token_usage.input_tokens,
+            "output_tokens": token_usage.output_tokens
+        }
+        total_cost = ragas_result.total_cost(
+            cost_per_input_token=cost_per_input_token,
+            cost_per_output_token=cost_per_output_token
+        )
+    else:
+        # No token usage data collected (e.g., non-LLM metrics or Nvidia metrics using separate LLM instances)
+        logger.info("No token usage data collected for these metrics")
+        total_tokens = {
+            "input_tokens": 0,
+            "output_tokens": 0
+        }
+        total_cost = 0.0
 
     return EvaluationScores(
         overall_scores=overall_scores,
