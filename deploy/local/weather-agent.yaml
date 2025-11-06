@@ -1,0 +1,22 @@
+kind: Namespace
+apiVersion: v1
+metadata:
+  name: sample-agents
+---
+apiVersion: runtime.agentic-layer.ai/v1alpha1
+kind: Agent
+metadata:
+  labels:
+    app.kubernetes.io/name: agent-runtime-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: weather-agent
+  namespace: sample-agents
+spec:
+  framework: google-adk
+  image: ghcr.io/agentic-layer/weather-agent:0.6.0
+  protocols:
+    - type: A2A
+  exposed: true
+  env:
+    - name: OTEL_SDK_DISABLED
+      value: "true"
