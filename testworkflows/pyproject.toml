@@ -54,6 +54,9 @@ line-length = 120
 # DTZ --> datetime timezone awareness
 extend-select = ["Q", "N", "I001", "PT", "TID251", "DTZ"]
 
+[tool.mypy]
+mypy_path = "scripts"
+
 [tool.bandit]
 exclude_dirs = [".cache", ".venv"]
 
