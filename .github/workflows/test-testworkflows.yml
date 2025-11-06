@@ -32,5 +32,29 @@ jobs:
     - name: Install Dependencies
       run: uv sync --all-packages
 
-    - name: Run pytest (skip E2E tests)
+    - name: Set up Kubernetes (kind)
+      uses: 'helm/kind-action@v1'
+      with:
+        cluster_name: testbench-cluster
+
+    - name: Install Tilt
+      uses: 'yokawasa/action-setup-kube-tools@v0.11.2'
+      with:
+        tilt: 'latest'
+
+    - name: Start Tiltfile services
+      run: tilt ci
+      working-directory: ..
+
+    - name: Wait for services to be ready
+      run: |
+        echo "Waiting for services to be ready..."
+        kubectl wait --for=condition=ready pod -l app=weather-agent --timeout=300s || true
+        kubectl wait --for=condition=ready pod -l app=ai-gateway-litellm --timeout=300s || true
+        kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=lgtm --timeout=300s || true
+
+        echo "Checking service status..."
+        kubectl get pods -A
+
+    - name: Run pytest
       run: uv run pytest tests/ -v
