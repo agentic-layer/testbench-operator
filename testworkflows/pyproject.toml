@@ -5,6 +5,7 @@ description = "Testbench to evaluate agents using Ragas"
 requires-python = ">=3.12"
 dependencies = [
     "a2a>=0.44",
+    "a2a-sdk>=0.3.10",
     "bandit[toml]>=1.7.8",
     "httpx>=0.28.1",
     "mypy>=1.17.0",
@@ -23,8 +24,7 @@ dependencies = [
 ]
 
 [tool.poe.tasks]
-test = "pytest tests/ -m"
-test-watch = "ptw ."
+test = "pytest tests/ -v"
 
 format = "ruff format"
 lint = "ruff check --fix"
