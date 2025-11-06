@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [ main ]
 
+env:
+  # Required environment variables for the test
+  GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+
 jobs:
   test-testworkflows:
     runs-on: ubuntu-latest
