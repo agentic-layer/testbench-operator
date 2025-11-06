@@ -6,15 +6,20 @@ requires-python = ">=3.12"
 dependencies = [
     "a2a>=0.44",
     "a2a-sdk>=0.3.0",
+    "bandit[toml]>=1.7.8",
     "crefi>=2.0.9",
     "httpx>=0.28.1",
+    "mypy>=1.17.0",
+    "import-linter>=2.0",
     "pandas>=2.3.3",
+    "poethepoet>=0.31.1",
     "pyarrow>=21.0.0",
     "starlette>=0.48.0",
     "utils>=1.0.2",
     "wget>=3.2",
     "opentelemetry-instrumentation-starlette>=0.56b0",
     "ragas>=0.3.5",
+    "ruff>=0.12.7",
     "datasets>=2.14.0",
     "opentelemetry-api>=1.20.0",
     "opentelemetry-sdk>=1.20.0",
@@ -24,3 +29,17 @@ dependencies = [
     "langchain-google-vertexai>=2.0.0",
     "python-dotenv>=1.0.0",
 ]
+
+[tool.poe.tasks]
+test = "pytest tests/ -m"
+test-watch = "ptw ."
+
+format = "ruff format"
+lint = "ruff check --fix"
+ruff = ["format", "lint"]
+
+bandit = "bandit -c pyproject.toml -r ."
+mypy = "mypy ."
+lint-imports = "lint-imports"
+
+check = ["test", "mypy", "bandit", "ruff", "lint-imports"]
