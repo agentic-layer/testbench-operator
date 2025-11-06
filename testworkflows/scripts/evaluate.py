@@ -112,9 +112,17 @@ def format_evaluation_scores(
     # Check if token usage data was collected (some metrics don't use LLMs or use separate LLM instances)
     if ragas_result.cost_cb and hasattr(ragas_result.cost_cb, "usage_data") and ragas_result.cost_cb.usage_data:
         token_usage = ragas_result.total_tokens()
+        # Handle both single TokenUsage and list of TokenUsage
+        if isinstance(token_usage, list):
+            input_tokens = sum(usage.input_tokens for usage in token_usage)
+            output_tokens = sum(usage.output_tokens for usage in token_usage)
+        else:
+            input_tokens = token_usage.input_tokens
+            output_tokens = token_usage.output_tokens
+
         total_tokens = {
-            "input_tokens": token_usage.input_tokens,
-            "output_tokens": token_usage.output_tokens,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
         }
         total_cost = ragas_result.total_cost(
             cost_per_input_token=cost_per_input_token,
@@ -137,7 +145,7 @@ def format_evaluation_scores(
 def main(
     output_file: str,
     model: str,
-    metrics: list[str] = None,
+    metrics: list[str] | None = None,
     cost_per_input_token: float = 5.0 / 1e6,
     cost_per_output_token: float = 15.0 / 1e6,
 ) -> None:
@@ -151,11 +159,11 @@ def main(
     """
     # Check if any metrics were provided
     if metrics is None:
-        raise ArgumentError("No metrics were provided as arguments")
+        raise ArgumentError(argument=metrics, message="No metrics were provided as arguments")
 
     # Create LLM client using the AI-Gateway
     ragas_llm = ChatOpenAI(model=model)
-    llm = LangchainLLMWrapper(ragas_llm)
+    llm: LangchainLLMWrapper = LangchainLLMWrapper(ragas_llm)
 
     dataset = EvaluationDataset.from_jsonl("data/experiments/ragas_experiment.jsonl")
 
@@ -167,6 +175,10 @@ def main(
         llm=llm,
         token_usage_parser=get_token_usage_for_openai,
     )
+
+    # Ensure we have an EvaluationResult (not an Executor)
+    if not isinstance(ragas_result, EvaluationResult):
+        raise TypeError(f"Expected EvaluationResult, got {type(ragas_result)}")
 
     # Format results
     logger.info("Formatting evaluation scores...")
