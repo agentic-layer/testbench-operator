@@ -2,10 +2,11 @@ import argparse
 import json
 import logging
 from logging import Logger
+
 from opentelemetry import metrics
+from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
-from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
 from opentelemetry.sdk.resources import Resource
 
 # Set up module-level logger
@@ -19,9 +20,7 @@ def get_overall_scores(file_path: str) -> dict[str, float]:
         return json.load(file).get("overall_scores", {})
 
 
-def create_and_push_metrics(
-    overall_scores: dict[str, float], workflow_name: str, otlp_endpoint: str
-) -> None:
+def create_and_push_metrics(overall_scores: dict[str, float], workflow_name: str, otlp_endpoint: str) -> None:
     """
     Create OpenTelemetry metrics for each overall score and push via OTLP.
 
@@ -31,9 +30,7 @@ def create_and_push_metrics(
         otlp_endpoint: URL of the OTLP endpoint (e.g., 'http://localhost:4318')
     """
     # Ensure the endpoint has the correct protocol
-    if not otlp_endpoint.startswith("http://") and not otlp_endpoint.startswith(
-        "https://"
-    ):
+    if not otlp_endpoint.startswith("http://") and not otlp_endpoint.startswith("https://"):
         otlp_endpoint = f"http://{otlp_endpoint}"
 
     # Create OTLP exporter
@@ -46,9 +43,7 @@ def create_and_push_metrics(
     )
 
     # Create resource with workflow metadata
-    resource = Resource.create(
-        {"service.name": "ragas-evaluation", "workflow.name": workflow_name}
-    )
+    resource = Resource.create({"service.name": "ragas-evaluation", "workflow.name": workflow_name})
 
     # Create MeterProvider with the exporter and resource
     provider = MeterProvider(resource=resource, metric_readers=[reader])
@@ -71,9 +66,7 @@ def create_and_push_metrics(
 
             # Set the gauge value with workflow_name as an attribute
             gauge.set(score, {"workflow_name": workflow_name})
-            logger.info(
-                f"Set metric 'ragas_evaluation_{metric_name}{{workflow_name=\"{workflow_name}\"}}' to {score}"
-            )
+            logger.info(f"Set metric 'ragas_evaluation_{metric_name}{{workflow_name=\"{workflow_name}\"}}' to {score}")
 
         # Force flush to ensure metrics are sent
         provider.force_flush()
@@ -88,14 +81,10 @@ def create_and_push_metrics(
 
     logger.info("Published metrics:")
     for metric_name, score in overall_scores.items():
-        logger.info(
-            f'  - ragas_evaluation_{metric_name}{{workflow_name="{workflow_name}"}}: {score}'
-        )
+        logger.info(f'  - ragas_evaluation_{metric_name}{{workflow_name="{workflow_name}"}}: {score}')
 
 
-def publish_metrics(
-    input_file: str, workflow_name: str | None = None, otlp_endpoint: str | None = None
-) -> None:
+def publish_metrics(input_file: str, workflow_name: str, otlp_endpoint: str) -> None:
     """
     Publish evaluation metrics via OpenTelemetry OTLP.
 
@@ -132,9 +121,7 @@ if __name__ == "__main__":
             python3 scripts/publish.py weather-assistant-test http://localhost:4318
     """
 
-    parser = argparse.ArgumentParser(
-        description="Publish RAGAS evaluation metrics via OpenTelemetry OTLP"
-    )
+    parser = argparse.ArgumentParser(description="Publish RAGAS evaluation metrics via OpenTelemetry OTLP")
     parser.add_argument(
         "workflow_name",
         help="Name of the test workflow (e.g., 'weather-assistant-test')",

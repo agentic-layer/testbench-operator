@@ -4,20 +4,19 @@ Unit tests for setup.py
 Tests the dataset download, conversion, and Ragas dataset creation functionality.
 """
 
-import unittest
-import tempfile
 import shutil
-from pathlib import Path
+import sys
+import tempfile
+import unittest
 from io import BytesIO
-from unittest.mock import patch, MagicMock
+from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pandas as pd
 
-import sys
-
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from setup import custom_convert_csv, get_converter, dataframe_to_ragas_dataset, main
+from setup import custom_convert_csv, dataframe_to_ragas_dataset, get_converter, main
 
 
 class TestCustomConvertCSV(unittest.TestCase):
@@ -107,12 +106,8 @@ class TestDataframeToRagasDataset(unittest.TestCase):
             dataframe_to_ragas_dataset(df)
 
             # Check for the file in the datasets subdirectory
-            dataset_file = (
-                Path(self.temp_dir) / "data" / "datasets" / "ragas_dataset.jsonl"
-            )
-            self.assertTrue(
-                dataset_file.exists(), f"Dataset file not found at {dataset_file}"
-            )
+            dataset_file = Path(self.temp_dir) / "data" / "datasets" / "ragas_dataset.jsonl"
+            self.assertTrue(dataset_file.exists(), f"Dataset file not found at {dataset_file}")
         finally:
             os.chdir(self.original_cwd)
 
@@ -150,12 +145,8 @@ class TestMain(unittest.TestCase):
             main("https://example.com/data.csv")
 
             # Verify dataset was created in datasets subdirectory
-            dataset_file = (
-                Path(self.temp_dir) / "data" / "datasets" / "ragas_dataset.jsonl"
-            )
-            self.assertTrue(
-                dataset_file.exists(), f"Dataset file not found at {dataset_file}"
-            )
+            dataset_file = Path(self.temp_dir) / "data" / "datasets" / "ragas_dataset.jsonl"
+            self.assertTrue(dataset_file.exists(), f"Dataset file not found at {dataset_file}")
 
             # Verify requests.get was called
             mock_get.assert_called_once_with("https://example.com/data.csv")
@@ -188,12 +179,8 @@ class TestMain(unittest.TestCase):
             main("https://example.com/data.json")
 
             # Verify dataset was created in datasets subdirectory
-            dataset_file = (
-                Path(self.temp_dir) / "data" / "datasets" / "ragas_dataset.jsonl"
-            )
-            self.assertTrue(
-                dataset_file.exists(), f"Dataset file not found at {dataset_file}"
-            )
+            dataset_file = Path(self.temp_dir) / "data" / "datasets" / "ragas_dataset.jsonl"
+            self.assertTrue(dataset_file.exists(), f"Dataset file not found at {dataset_file}")
         finally:
             os.chdir(self.original_cwd)
 

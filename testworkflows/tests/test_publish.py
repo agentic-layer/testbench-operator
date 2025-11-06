@@ -4,19 +4,17 @@ Unit tests for publish.py
 Tests the Prometheus metrics publishing functionality.
 """
 
-import unittest
-import tempfile
-import shutil
 import json
-from pathlib import Path
-from unittest.mock import patch, MagicMock
-
-
+import shutil
 import sys
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from publish import get_overall_scores, create_and_push_metrics, publish_metrics
+from publish import create_and_push_metrics, get_overall_scores, publish_metrics
 
 
 class TestGetOverallScores(unittest.TestCase):

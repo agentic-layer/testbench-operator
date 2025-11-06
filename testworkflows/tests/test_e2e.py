@@ -20,16 +20,14 @@ Example:
 """
 
 import argparse
+import logging
 import subprocess
 import sys
-import logging
 from pathlib import Path
 from typing import List
 
 # Set up logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 

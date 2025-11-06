@@ -1,17 +1,14 @@
 import argparse
-
-import requests
-from requests import Response
-
+from io import BytesIO
 from pathlib import Path
 from typing import Callable
-from io import BytesIO
 
 import pandas as pd
+import requests
 from pandas import DataFrame
 from pydantic import BaseModel
 from ragas import Dataset
-
+from requests import Response
 
 
 def dataframe_to_ragas_dataset(dataframe: DataFrame) -> None:
@@ -37,10 +34,6 @@ def dataframe_to_ragas_dataset(dataframe: DataFrame) -> None:
         backend="local/jsonl",
         root_dir="./data",
     )
-
-    """# Append all samples to the dataset
-    for sample in dataset_samples:
-        dataset.append(sample)"""
 
     # Save the dataset
     dataset.save()

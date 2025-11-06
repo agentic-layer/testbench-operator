@@ -4,18 +4,16 @@ Unit tests for run.py
 Tests the agent query execution and experiment functionality.
 """
 
-import unittest
-import tempfile
 import shutil
-from pathlib import Path
-from unittest.mock import patch, MagicMock, AsyncMock
-
-
 import sys
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from run import initialize_client, run_agent_experiment, main
+from run import initialize_client, main, run_agent_experiment
 
 
 class TestInitializeClient(unittest.TestCase):
@@ -23,9 +21,7 @@ class TestInitializeClient(unittest.TestCase):
 
     @patch("run.ClientFactory")
     @patch("run.minimal_agent_card")
-    async def test_initialize_client_creates_client(
-        self, mock_agent_card, mock_factory
-    ):
+    async def test_initialize_client_creates_client(self, mock_agent_card, mock_factory):
         """Test that initialize_client creates a client correctly"""
         # Mock the agent card
         mock_card = MagicMock()
@@ -60,9 +56,7 @@ class TestRunAgentExperiment(unittest.TestCase):
 
     @patch("run.logging.getLogger")
     @patch("run.initialize_client")
-    async def test_run_agent_experiment_success(
-        self, mock_init_client, mock_get_logger
-    ):
+    async def test_run_agent_experiment_success(self, mock_init_client, mock_get_logger):
         """Test successful agent query execution"""
         # Mock logger
         mock_logger = MagicMock()
@@ -104,9 +98,7 @@ class TestRunAgentExperiment(unittest.TestCase):
                 return await run_agent_experiment.func(row, agent_url=agent_url)
 
             # Call the function
-            result = await test_experiment_func(
-                test_row, agent_url="http://test-agent:8000"
-            )
+            result = await test_experiment_func(test_row, agent_url="http://test-agent:8000")
 
         # Verify result structure
         self.assertIn("user_input", result)
@@ -146,9 +138,7 @@ class TestRunAgentExperiment(unittest.TestCase):
                 return await run_agent_experiment.func(row, agent_url=agent_url)
 
             # Call the function
-            result = await test_experiment_func(
-                test_row, agent_url="http://test-agent:8000"
-            )
+            result = await test_experiment_func(test_row, agent_url="http://test-agent:8000")
 
         # Verify error is captured in response
         self.assertIn("response", result)
