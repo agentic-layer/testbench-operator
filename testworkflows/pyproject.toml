@@ -43,3 +43,27 @@ mypy = "mypy ."
 lint-imports = "lint-imports"
 
 check = ["test", "mypy", "bandit", "ruff", "lint-imports"]
+
+[tool.importlinter]
+root_package = "scripts"
+
+[tool.ruff]
+# Allow lines to be as long as 120.
+line-length = 120
+
+
+[tool.ruff.lint]
+# https://docs.astral.sh/ruff/rules/
+# I001 --> enable import sorting rules
+# Q --> enable flake8-quotes rules for consistent quote style
+# N --> pep8-naming for proper naming conventions
+# PT --> flake8-pytest-style for pytest best practices
+# TID251 --> banned relative imports
+# DTZ --> datetime timezone awareness
+extend-select = ["Q", "N", "I001", "PT", "TID251", "DTZ"]
+
+[tool.bandit]
+exclude_dirs = [".cache", ".venv"]
+
+[tool.bandit.assert_used]
+skips = ["*_test.py", "*test_*.py"]
