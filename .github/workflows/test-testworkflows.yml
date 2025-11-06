@@ -60,5 +60,8 @@ jobs:
         echo "Checking service status..."
         kubectl get pods -A
 
+        echo "Waiting for test-data-server (HTTP server on port 8000)..."
+        curl --retry 30 --retry-delay 2 --retry-connrefused -f http://localhost:8000/dataset.json > /dev/null
+
     - name: Run pytest
       run: uv run pytest tests/ -v
