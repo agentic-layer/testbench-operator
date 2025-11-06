@@ -1,7 +1,7 @@
 import argparse
 from io import BytesIO
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable, cast
 
 import pandas as pd
 import requests
@@ -25,7 +25,7 @@ def dataframe_to_ragas_dataset(dataframe: DataFrame) -> None:
     output_dir.mkdir(exist_ok=True)
 
     # Convert DataFrame to list of dictionaries
-    dataset_samples = dataframe.to_dict(orient="records")
+    dataset_samples = cast(list[dict[str, Any]], dataframe.to_dict(orient="records"))
 
     # Create Ragas Dataset
     dataset: Dataset[BaseModel] = Dataset(
@@ -43,7 +43,7 @@ def get_converter(url: str) -> Callable[[BytesIO], DataFrame]:
     """Extract the file format from the URL and return the converter function"""
     suffix = Path(url).suffix.lower()
 
-    format_map = {
+    format_map: dict[str, Callable[[BytesIO], DataFrame]] = {
         ".json": pd.read_json,
         ".csv": custom_convert_csv,
         ".parquet": pd.read_parquet,
