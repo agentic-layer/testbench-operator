@@ -46,6 +46,9 @@ jobs:
         curl -fsSL https://raw.githubusercontent.com/tilt-dev/tilt/master/scripts/install.sh | bash
         tilt version
 
+    - name: Start test data server
+      run: uv run python -m http.server 8000 --directory tests/test_data &
+
     - name: Start Tiltfile services
       run: tilt ci
       working-directory: .
