@@ -3,12 +3,12 @@ End-to-end test script that runs all scripts in the correct order:
 1. setup.py - Downloads, converts and saves Ragas Dataset to data/datasets/ragas_dataset.jsonl
 2. run.py - Runs agent queries on the dataset and saves Ragas Experiment to data/experiments/ragas_experiment.jsonl
 3. evaluate.py - Evaluates results using RAGAS metrics and saves result to results/evaluation_scores.json
-4. publish.py - Publishes metrics to Prometheus Pushgateway
+4. publish.py - Publishes metrics via OpenTelemetry OTLP
 
 Usage:
     python test_e2e.py --dataset-url <URL> --agent-url <URL> --model <MODEL> \
         --metrics <METRIC1> [METRIC2 ...] --workflow-name <NAME> \
-        [--pushgateway-url <URL>]
+        [--otlp-endpoint <URL>]
 
 Example:
     python test_e2e.py \
@@ -44,14 +44,14 @@ class E2ETestRunner:
         model: str,
         metrics: List[str],
         workflow_name: str,
-        pushgateway_url: str = "localhost:9091"
+        otlp_endpoint: str = "localhost:4318"
     ):
         self.dataset_url = dataset_url
         self.agent_url = agent_url
         self.model = model
         self.metrics = metrics
         self.workflow_name = workflow_name
-        self.pushgateway_url = pushgateway_url
+        self.otlp_endpoint = otlp_endpoint
 
         # Define script paths
         self.scripts_dir = Path(__file__).parent.parent / "scripts"
@@ -187,14 +187,14 @@ class E2ETestRunner:
 
 
     def run_publish(self) -> bool:
-        """Run publish.py to publish metrics to Prometheus Pushgateway."""
+        """Run publish.py to publish metrics via OpenTelemetry OTLP."""
         command = [
             "python3",
             str(self.publish_script),
             self.workflow_name,
-            self.pushgateway_url
+            self.otlp_endpoint
         ]
-        return self.run_command(command, "4. Publish - Push Metrics to Prometheus")
+        return self.run_command(command, "4. Publish - Push Metrics via OTLP")
 
 
     def run_full_pipeline(self) -> bool:
@@ -232,7 +232,7 @@ class E2ETestRunner:
         logger.info(f"  ✓ Ragas Dataset created: {self.dataset_file}")
         logger.info(f"  ✓ Ragas Experiment saved: {self.results_file}")
         logger.info(f"  ✓ Evaluation completed: {self.evaluation_file}")
-        logger.info(f"  ✓ Metrics published to: {self.pushgateway_url}")
+        logger.info(f"  ✓ Metrics published to: {self.otlp_endpoint}")
         logger.info(f"  ✓ Workflow name: {self.workflow_name}")
 
         return True
@@ -252,15 +252,15 @@ def main():
                       --model "gemini-flash-latest" \\
                       --metrics faithfulness answer_relevancy \\
                       --workflow-name "my-test"
-                
-                  # With custom Pushgateway URL
+
+                  # With custom OTLP endpoint
                   python test_e2e.py \\
                       --dataset-url "https://example.com/data.csv" \\
                       --agent-url "http://localhost:8000" \\
                       --model "gemini-flash-latest" \\
                       --metrics faithfulness \\
                       --workflow-name "my-test" \\
-                      --pushgateway-url "pushgateway.example.com:9091"
+                      --otlp-endpoint "http://otlp.example.com:4318"
                """
     )
 
@@ -296,9 +296,9 @@ def main():
     )
 
     parser.add_argument(
-        "--pushgateway-url",
-        default="localhost:9091",
-        help="URL of Prometheus Pushgateway (default: localhost:9091)"
+        "--otlp-endpoint",
+        default="localhost:4318",
+        help="URL of the OTLP HTTP endpoint (default: localhost:4318)"
     )
 
     args = parser.parse_args()
@@ -310,7 +310,7 @@ def main():
         model=args.model,
         metrics=args.metrics,
         workflow_name=args.workflow_name,
-        pushgateway_url=args.pushgateway_url
+        otlp_endpoint=args.otlp_endpoint
     )
 
     success = runner.run_full_pipeline()
