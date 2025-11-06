@@ -28,8 +28,7 @@ from typing import List
 
 # Set up logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -44,7 +43,7 @@ class E2ETestRunner:
         model: str,
         metrics: List[str],
         workflow_name: str,
-        otlp_endpoint: str = "localhost:4318"
+        otlp_endpoint: str = "localhost:4318",
     ):
         self.dataset_url = dataset_url
         self.agent_url = agent_url
@@ -65,7 +64,6 @@ class E2ETestRunner:
         self.results_file = Path("./data/experiments/ragas_experiment.jsonl")
         self.evaluation_file = Path("./results/evaluation_scores.json")
 
-
     def verify_scripts_exist(self) -> bool:
         """Verify that all required scripts exist."""
         logger.info("Verifying all scripts exist...")
@@ -73,7 +71,7 @@ class E2ETestRunner:
             self.setup_script,
             self.run_script,
             self.evaluate_script,
-            self.publish_script
+            self.publish_script,
         ]
 
         missing_scripts = [script for script in scripts if not script.exists()]
@@ -87,7 +85,6 @@ class E2ETestRunner:
         logger.info("✓ All scripts found")
         return True
 
-
     def run_command(self, command: List[str], step_name: str) -> bool:
         """
         Run a command and handle output/errors.
@@ -99,23 +96,18 @@ class E2ETestRunner:
         Returns:
             True if successful, False otherwise
         """
-        logger.info(f"\n{'='*60}")
+        logger.info(f"\n{'=' * 60}")
         logger.info(f"Step: {step_name}")
         logger.info(f"Command: {' '.join(command)}")
-        logger.info(f"{'='*60}\n")
+        logger.info(f"{'=' * 60}\n")
 
         try:
-            result = subprocess.run(
-                command,
-                check=True,
-                capture_output=True,
-                text=True
-            )
+            result = subprocess.run(command, check=True, capture_output=True, text=True)
 
             # Log stdout if present
             if result.stdout:
                 logger.info("Output:")
-                for line in result.stdout.strip().split('\n'):
+                for line in result.stdout.strip().split("\n"):
                     logger.info(f"  {line}")
 
             logger.info(f"✓ {step_name} completed successfully\n")
@@ -126,12 +118,12 @@ class E2ETestRunner:
 
             if e.stdout:
                 logger.error("Standard output:")
-                for line in e.stdout.strip().split('\n'):
+                for line in e.stdout.strip().split("\n"):
                     logger.error(f"  {line}")
 
             if e.stderr:
                 logger.error("Error output:")
-                for line in e.stderr.strip().split('\n'):
+                for line in e.stderr.strip().split("\n"):
                     logger.error(f"  {line}")
 
             return False
@@ -139,7 +131,6 @@ class E2ETestRunner:
         except Exception as e:
             logger.error(f"✗ Unexpected error in {step_name}: {e}")
             return False
-
 
     def verify_file_exists(self, file_path: Path, step_name: str) -> bool:
         """Verify that an expected output file was created."""
@@ -150,7 +141,6 @@ class E2ETestRunner:
             logger.error(f"✗ Expected file {file_path} not found after {step_name}")
             return False
 
-
     def run_setup(self) -> bool:
         """Run setup.py to download and convert dataset."""
         command = ["python3", str(self.setup_script), self.dataset_url]
@@ -159,7 +149,6 @@ class E2ETestRunner:
         if success:
             return self.verify_file_exists(self.dataset_file, "setup.py")
         return False
-
 
     def run_agent_queries(self) -> bool:
         """Run run.py to execute agent queries on the dataset."""
@@ -170,21 +159,14 @@ class E2ETestRunner:
             return self.verify_file_exists(self.results_file, "run.py")
         return False
 
-
     def run_evaluation(self) -> bool:
         """Run evaluate.py to evaluate results using RAGAS metrics."""
-        command = [
-            "python3",
-            str(self.evaluate_script),
-            self.model,
-            *self.metrics
-        ]
+        command = ["python3", str(self.evaluate_script), self.model, *self.metrics]
         success = self.run_command(command, "3. Evaluate - Calculate RAGAS Metrics")
 
         if success:
             return self.verify_file_exists(self.evaluation_file, "evaluate.py")
         return False
-
 
     def run_publish(self) -> bool:
         """Run publish.py to publish metrics via OpenTelemetry OTLP."""
@@ -192,16 +174,15 @@ class E2ETestRunner:
             "python3",
             str(self.publish_script),
             self.workflow_name,
-            self.otlp_endpoint
+            self.otlp_endpoint,
         ]
         return self.run_command(command, "4. Publish - Push Metrics via OTLP")
 
-
     def run_full_pipeline(self) -> bool:
         """Execute the complete E2E test pipeline."""
-        logger.info("\n" + "="*60)
+        logger.info("\n" + "=" * 60)
         logger.info("Starting E2E Test Pipeline")
-        logger.info("="*60 + "\n")
+        logger.info("=" * 60 + "\n")
 
         # Verify all scripts exist before starting
         if not self.verify_scripts_exist():
@@ -213,20 +194,20 @@ class E2ETestRunner:
             ("Setup", self.run_setup),
             ("Run", self.run_agent_queries),
             ("Evaluate", self.run_evaluation),
-            ("Publish", self.run_publish)
+            ("Publish", self.run_publish),
         ]
 
         for step_name, step_func in steps:
             if not step_func():
-                logger.error(f"\n{'='*60}")
+                logger.error(f"\n{'=' * 60}")
                 logger.error(f"E2E Test FAILED at step: {step_name}")
-                logger.error(f"{'='*60}\n")
+                logger.error(f"{'=' * 60}\n")
                 return False
 
         # All steps completed successfully
-        logger.info("\n" + "="*60)
+        logger.info("\n" + "=" * 60)
         logger.info("E2E Test Pipeline COMPLETED SUCCESSFULLY")
-        logger.info("="*60 + "\n")
+        logger.info("=" * 60 + "\n")
 
         logger.info("Summary:")
         logger.info(f"  ✓ Ragas Dataset created: {self.dataset_file}")
@@ -241,8 +222,8 @@ class E2ETestRunner:
 def main():
     """Parse arguments and run the E2E test"""
     parser = argparse.ArgumentParser(
-        description = "End-to-end test runner for the agent testing pipeline",
-        formatter_class = argparse.RawDescriptionHelpFormatter,
+        description="End-to-end test runner for the agent testing pipeline",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
                 Examples:
                   # Basic usage
@@ -261,44 +242,40 @@ def main():
                       --metrics faithfulness \\
                       --workflow-name "my-test" \\
                       --otlp-endpoint "http://otlp.example.com:4318"
-               """
+               """,
     )
 
     parser.add_argument(
         "--dataset-url",
         required=True,
-        help="URL to the dataset in .csv / .json / .parquet format"
+        help="URL to the dataset in .csv / .json / .parquet format",
     )
 
-    parser.add_argument(
-        "--agent-url",
-        required=True,
-        help="URL to agent"
-    )
+    parser.add_argument("--agent-url", required=True, help="URL to agent")
 
     parser.add_argument(
         "--model",
         required=True,
-        help="Model name to use for evaluation (e.g., gemini-flash-latest)"
+        help="Model name to use for evaluation (e.g., gemini-flash-latest)",
     )
 
     parser.add_argument(
         "--metrics",
         nargs="+",
         required=True,
-        help="At least one (or more) metrics to evaluate (e.g., faithfulness, answer_relevancy)"
+        help="At least one (or more) metrics to evaluate (e.g., faithfulness, answer_relevancy)",
     )
 
     parser.add_argument(
         "--workflow-name",
         required=True,
-        help="Name of the test workflow (e.g., 'weather-assistant-test')"
+        help="Name of the test workflow (e.g., 'weather-assistant-test')",
     )
 
     parser.add_argument(
         "--otlp-endpoint",
         default="localhost:4318",
-        help="URL of the OTLP HTTP endpoint (default: localhost:4318)"
+        help="URL of the OTLP HTTP endpoint (default: localhost:4318)",
     )
 
     args = parser.parse_args()
@@ -310,7 +287,7 @@ def main():
         model=args.model,
         metrics=args.metrics,
         workflow_name=args.workflow_name,
-        otlp_endpoint=args.otlp_endpoint
+        otlp_endpoint=args.otlp_endpoint,
     )
 
     success = runner.run_full_pipeline()
