@@ -38,9 +38,9 @@ jobs:
         cluster_name: testbench-cluster
 
     - name: Install Tilt
-      uses: 'yokawasa/action-setup-kube-tools@v0.11.2'
-      with:
-        tilt: 'latest'
+      run: |
+        curl -fsSL https://raw.githubusercontent.com/tilt-dev/tilt/master/scripts/install.sh | bash
+        tilt version
 
     - name: Start Tiltfile services
       run: tilt ci
