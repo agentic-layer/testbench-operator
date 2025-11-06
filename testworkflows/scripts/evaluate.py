@@ -40,6 +40,7 @@ def get_available_metrics() -> dict[str, Metric]:
                 available_metrics[metric_name] = metric_instance
             except Exception:
                 # Skip metrics that can't be instantiated without parameters
+                logger.info(f"Exception encountered: {Exception}")
                 pass
 
     return available_metrics
@@ -163,7 +164,7 @@ def main(
 
     # Create LLM client using the AI-Gateway
     ragas_llm: ChatOpenAI = ChatOpenAI(model=model)
-    llm = LangchainLLMWrapper(ragas_llm) # type: ignore[arg-type]
+    llm = LangchainLLMWrapper(ragas_llm)  # type: ignore[arg-type]
 
     dataset = EvaluationDataset.from_jsonl("data/experiments/ragas_experiment.jsonl")
 
