@@ -4,18 +4,15 @@ import json
 import logging
 import os
 from dataclasses import dataclass, asdict
-from pydantic import BaseModel
 from argparse import ArgumentError
 from logging import Logger
 from typing import Any
-from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
-from ragas import evaluate, Experiment
+from ragas import evaluate
 from ragas.dataset_schema import EvaluationDataset, EvaluationResult
 from ragas.llms import LangchainLLMWrapper
 from ragas.metrics import Metric
 import ragas.metrics as metrics_module
-from langchain_google_genai import ChatGoogleGenerativeAI
 from ragas.cost import get_token_usage_for_openai
 
 # Set up module-level logger
@@ -103,9 +100,6 @@ def format_evaluation_scores(
     Returns:
         Formatted dictionary matching the required structure
     """
-
-    # Get the pandas DataFrame from RAGAS result
-    df = ragas_result.to_pandas()
 
     # Calculate overall scores (mean of each metric)
     overall_scores = ragas_result._repr_dict
