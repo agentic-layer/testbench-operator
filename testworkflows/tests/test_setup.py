@@ -149,7 +149,7 @@ class TestMain(unittest.TestCase):
             self.assertTrue(dataset_file.exists(), f"Dataset file not found at {dataset_file}")
 
             # Verify requests.get was called
-            mock_get.assert_called_once_with("https://example.com/data.csv")
+            mock_get.assert_called_once_with("https://example.com/data.csv", timeout=20)
         finally:
             os.chdir(self.original_cwd)
 

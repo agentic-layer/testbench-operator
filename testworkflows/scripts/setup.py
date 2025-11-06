@@ -86,7 +86,7 @@ def main(url: str) -> None:
     converter = get_converter(url)
 
     # Download file from URL and raise HTTP error if it occurs
-    file: Response = requests.get(url)
+    file: Response = requests.get(url, timeout=20)
     file.raise_for_status()
 
     # Load into DataFrame by using the correct converter
