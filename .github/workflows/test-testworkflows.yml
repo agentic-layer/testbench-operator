@@ -44,7 +44,7 @@ jobs:
 
     - name: Start Tiltfile services
       run: tilt ci
-      working-directory: ..
+      working-directory: .
 
     - name: Wait for services to be ready
       run: |
