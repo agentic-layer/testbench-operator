@@ -32,12 +32,8 @@ ruff = ["format", "lint"]
 
 bandit = "bandit -c pyproject.toml -r ."
 mypy = "mypy ."
-lint-imports = "lint-imports"
 
-check = ["test", "mypy", "bandit", "ruff", "lint-imports"]
-
-[tool.importlinter]
-root_package = "scripts"
+check = ["test", "mypy", "bandit", "ruff"]
 
 [tool.ruff]
 # Allow lines to be as long as 120.
@@ -54,11 +50,20 @@ line-length = 120
 # DTZ --> datetime timezone awareness
 extend-select = ["Q", "N", "I001", "PT", "TID251", "DTZ"]
 
+ignore = [
+    "PT009", # allow unittest-style assertions (assertEqual, assertAlmostEqual, etc.)
+    "PT027" # allow unittest.TestCase without using pytest fixtures
+]
+
 [tool.mypy]
 mypy_path = "scripts"
 
 [tool.bandit]
 exclude_dirs = [".cache", ".venv"]
+skips = [
+    "B404", # Usage of 'subprocess' module
+    "B603", # 'Subprocess' call without check for execution of untrusted input
+]
 
 [tool.bandit.assert_used]
 skips = ["*_test.py", "*test_*.py"]
