@@ -162,8 +162,8 @@ def main(
         raise ArgumentError(argument=metrics, message="No metrics were provided as arguments")
 
     # Create LLM client using the AI-Gateway
-    ragas_llm = ChatOpenAI(model=model)
-    llm: LangchainLLMWrapper = LangchainLLMWrapper(ragas_llm)
+    ragas_llm: ChatOpenAI = ChatOpenAI(model=model)
+    llm = LangchainLLMWrapper(ragas_llm) # type: ignore[arg-type]
 
     dataset = EvaluationDataset.from_jsonl("data/experiments/ragas_experiment.jsonl")
 
