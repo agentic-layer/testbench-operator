@@ -3,17 +3,18 @@ import inspect
 import json
 import logging
 import os
-from dataclasses import dataclass, asdict
 from argparse import ArgumentError
+from dataclasses import asdict, dataclass
 from logging import Logger
 from typing import Any
+
+import ragas.metrics as metrics_module
 from langchain_openai import ChatOpenAI
 from ragas import evaluate
+from ragas.cost import get_token_usage_for_openai
 from ragas.dataset_schema import EvaluationDataset, EvaluationResult
 from ragas.llms import LangchainLLMWrapper
 from ragas.metrics import Metric
-import ragas.metrics as metrics_module
-from ragas.cost import get_token_usage_for_openai
 
 # Set up module-level logger
 logging.basicConfig(level=logging.INFO)
@@ -109,11 +110,7 @@ def format_evaluation_scores(
 
     # Extract token usage and calculate cost using TokenUsageParser
     # Check if token usage data was collected (some metrics don't use LLMs or use separate LLM instances)
-    if (
-        ragas_result.cost_cb
-        and hasattr(ragas_result.cost_cb, "usage_data")
-        and ragas_result.cost_cb.usage_data
-    ):
+    if ragas_result.cost_cb and hasattr(ragas_result.cost_cb, "usage_data") and ragas_result.cost_cb.usage_data:
         token_usage = ragas_result.total_tokens()
         total_tokens = {
             "input_tokens": token_usage.input_tokens,

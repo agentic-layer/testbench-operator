@@ -1,22 +1,18 @@
-import asyncio
 import argparse
-import httpx
-
+import asyncio
 import logging
 from logging import Logger
-
 from uuid import uuid4
 
+import httpx
+from a2a.client.client import Client, ClientConfig
+from a2a.client.client_factory import ClientFactory, minimal_agent_card
+from a2a.types import (
+    AgentCard,
+    Message,
+)
 from pydantic import BaseModel
 from ragas import Dataset, experiment
-
-from a2a.client.client_factory import ClientFactory, minimal_agent_card
-from a2a.client.client import ClientConfig, Client
-
-from a2a.types import (
-    Message,
-    AgentCard,
-)
 
 # Set up module-level logger
 logging.basicConfig(level=logging.INFO)
@@ -72,9 +68,7 @@ async def run_agent_experiment(row, agent_url: str) -> dict[str, str | list]:
                 if isinstance(response, tuple):
                     task, _ = response
                     if task:
-                        artifacts: list = task.model_dump(
-                            mode="json", include={"artifacts"}
-                        ).get("artifacts", [])
+                        artifacts: list = task.model_dump(mode="json", include={"artifacts"}).get("artifacts", [])
 
                         # Extract the model response
                         if artifacts and artifacts[0].get("parts"):
@@ -102,16 +96,12 @@ async def main(agent_url: str) -> None:
 
     # Load existing Ragas dataset
     logger.info("Loading Ragas dataset from data/datasets/ragas_dataset.jsonl")
-    dataset: Dataset[BaseModel] = Dataset.load(
-        name="ragas_dataset", backend="local/jsonl", root_dir="./data"
-    )
+    dataset: Dataset[BaseModel] = Dataset.load(name="ragas_dataset", backend="local/jsonl", root_dir="./data")
     logger.info(f"Dataset loaded with {len(dataset)} samples")
 
     # Run the experiment
     logger.info("Starting experiment...")
-    await run_agent_experiment.arun(
-        dataset, name="ragas_experiment", agent_url=agent_url
-    )
+    await run_agent_experiment.arun(dataset, name="ragas_experiment", agent_url=agent_url)
 
     logger.info("Experiment completed successfully")
     logger.info("Results saved to data/experiments/ragas_experiment.jsonl")

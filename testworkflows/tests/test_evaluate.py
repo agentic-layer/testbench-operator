@@ -4,21 +4,20 @@ Unit tests for evaluate.py
 Tests the RAGAS evaluation functionality.
 """
 
-import unittest
-import tempfile
-import shutil
 import json
+import shutil
+import sys
+import tempfile
+import unittest
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from ragas.dataset_schema import EvaluationResult
 import pandas as pd
-
-import sys
+from ragas.dataset_schema import EvaluationResult
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from evaluate import format_evaluation_scores, main, AVAILABLE_METRICS
+from evaluate import AVAILABLE_METRICS, format_evaluation_scores, main
 
 
 class TestFormatEvaluationScores(unittest.TestCase):
@@ -28,9 +27,7 @@ class TestFormatEvaluationScores(unittest.TestCase):
         """Test that overall scores are calculated correctly"""
         mock_result = MagicMock(spec=EvaluationResult)
 
-        df = pd.DataFrame(
-            {"faithfulness": [0.9, 0.8, 0.7], "answer_relevancy": [0.85, 0.75, 0.65]}
-        )
+        df = pd.DataFrame({"faithfulness": [0.9, 0.8, 0.7], "answer_relevancy": [0.85, 0.75, 0.65]})
         mock_result.to_pandas.return_value = df
 
         # Mock _repr_dict with calculated averages
@@ -47,9 +44,7 @@ class TestFormatEvaluationScores(unittest.TestCase):
 
         # Verify overall scores are correct
         self.assertAlmostEqual(formatted.overall_scores["faithfulness"], 0.8, places=2)
-        self.assertAlmostEqual(
-            formatted.overall_scores["answer_relevancy"], 0.75, places=2
-        )
+        self.assertAlmostEqual(formatted.overall_scores["answer_relevancy"], 0.75, places=2)
 
     def test_individual_results_present(self):
         """Test that individual results are included"""
