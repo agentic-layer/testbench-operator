@@ -10,6 +10,9 @@ from a2a.client.client_factory import ClientFactory, minimal_agent_card
 from a2a.types import (
     AgentCard,
     Message,
+    Part,
+    Role,
+    TextPart,
 )
 from pydantic import BaseModel
 from ragas import Dataset, experiment
@@ -56,9 +59,9 @@ async def run_agent_experiment(row, agent_url: str) -> dict[str, str | list]:
             input_text = row.get("user_input")
 
             message = Message(
-                role="user",
-                parts=[{"kind": "text", "text": input_text}],
-                messageId=uuid4().hex,
+                role=Role.user,
+                parts=[Part(TextPart(text=input_text))],
+                message_id=uuid4().hex,
             )
 
             logger.info(f"Processing: {input_text}")
