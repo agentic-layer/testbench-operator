@@ -8,7 +8,7 @@ from logging import Logger
 from uuid import uuid4
 
 from pydantic import BaseModel
-from ragas import Dataset, experiment, Experiment
+from ragas import Dataset, experiment
 
 from a2a.client.client_factory import ClientFactory, minimal_agent_card
 from a2a.client.client import ClientConfig, Client
@@ -109,14 +109,14 @@ async def main(agent_url: str) -> None:
 
     # Run the experiment
     logger.info('Starting experiment...')
-    results: Experiment = await run_agent_experiment.arun(
+    await run_agent_experiment.arun(
         dataset,
         name = "ragas_experiment",
         agent_url = agent_url
     )
 
     logger.info('Experiment completed successfully')
-    logger.info(f'Results saved to data/experiments/ragas_experiment.jsonl')
+    logger.info('Results saved to data/experiments/ragas_experiment.jsonl')
 
 
 if __name__ == '__main__':
