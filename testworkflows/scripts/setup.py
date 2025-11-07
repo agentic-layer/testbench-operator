@@ -1,14 +1,21 @@
 import argparse
-from io import BytesIO
+import logging
+import os
 from pathlib import Path
-from typing import Any, Callable, cast
+from typing import Callable
+from io import BytesIO
 
+import boto3
+from botocore.client import Config
 import pandas as pd
-import requests
 from pandas import DataFrame
 from pydantic import BaseModel
 from ragas import Dataset
-from requests import Response
+
+# Set up module-level logger
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 
 
 def dataframe_to_ragas_dataset(dataframe: DataFrame) -> None:
@@ -25,7 +32,7 @@ def dataframe_to_ragas_dataset(dataframe: DataFrame) -> None:
     output_dir.mkdir(exist_ok=True)
 
     # Convert DataFrame to list of dictionaries
-    dataset_samples = cast(list[dict[str, Any]], dataframe.to_dict(orient="records"))
+    dataset_samples = dataframe.to_dict(orient="records")
 
     # Create Ragas Dataset
     dataset: Dataset[BaseModel] = Dataset(
@@ -39,9 +46,9 @@ def dataframe_to_ragas_dataset(dataframe: DataFrame) -> None:
     dataset.save()
 
 
-def get_converter(url: str) -> Callable[[BytesIO], DataFrame]:
-    """Extract the file format from the URL and return the converter function"""
-    suffix = Path(url).suffix.lower()
+def get_converter(key: str) -> Callable[[BytesIO], DataFrame]:
+    """Extract the file format from the S3 key and return the converter function"""
+    suffix = Path(key).suffix.lower()
 
     format_map: dict[str, Callable[[BytesIO], DataFrame]] = {
         ".json": pd.read_json,
@@ -53,7 +60,7 @@ def get_converter(url: str) -> Callable[[BytesIO], DataFrame]:
     if suffix in format_map:
         return format_map[suffix]
 
-    raise TypeError(f"Unsupported filetype at url: {url}")
+    raise TypeError(f"Unsupported filetype for key: {key}")
 
 
 def custom_convert_csv(input_file: BytesIO) -> DataFrame:
@@ -78,35 +85,65 @@ def custom_convert_csv(input_file: BytesIO) -> DataFrame:
     return dataframe
 
 
-def main(url: str) -> None:
-    """Download provided dataset -> convert to Ragas dataset -> save to data/ragas_dataset.jsonl
+def create_s3_client() -> boto3.client:
+    """Create and configure S3 client for MinIO"""
+    # Get MinIO credentials from environment
+    access_key = os.getenv("MINIO_ROOT_USER", "minio")
+    secret_key = os.getenv("MINIO_ROOT_PASSWORD", "minio123")
+    endpoint_url = os.getenv("MINIO_ENDPOINT", "http://testkube-minio-testbench.testbench:9000")
+
+    logger.info(f"Connecting to MinIO at {endpoint_url}")
+
+    # Create S3 client with MinIO configuration
+    s3_client = boto3.client(
+        "s3",
+        endpoint_url=endpoint_url,
+        aws_access_key_id=access_key,
+        aws_secret_access_key=secret_key,
+        config=Config(signature_version="s3v4"),
+        region_name="us-east-1",  # MinIO doesn't care about region, but boto3 requires it
+    )
+
+    return s3_client
+
+
+def main(bucket: str, key: str) -> None:
+    """Download dataset from S3 -> convert to Ragas dataset -> save to data/ragas_dataset.jsonl
 
     Source dataset must contain columns: user_input, retrieved_contexts, reference
     """
-    converter = get_converter(url)
+    logger.info(f"Starting dataset download from S3: s3://{bucket}/{key}")
 
-    # Download file from URL and raise HTTP error if it occurs
-    file: Response = requests.get(url, timeout=20)
-    file.raise_for_status()
+    # Get converter based on file extension
+    converter = get_converter(key)
+
+    # Create S3 client
+    s3_client = create_s3_client()
+
+    # Download file from S3
+    logger.info(f"Downloading from bucket '{bucket}', key '{key}'...")
+    try:
+        response = s3_client.get_object(Bucket=bucket, Key=key)
+        file_content = response["Body"].read()
+        logger.info(f"Downloaded {len(file_content)} bytes")
+    except Exception as e:
+        logger.error(f"Failed to download from S3: {e}")
+        raise
 
     # Load into DataFrame by using the correct converter
-    buffer = BytesIO(file.content)
+    logger.info("Converting to DataFrame...")
+    buffer = BytesIO(file_content)
     dataframe = converter(buffer)
+    logger.info(f"Loaded {len(dataframe)} rows")
 
     # Convert DataFrame to Ragas dataset and save it
+    logger.info("Converting to Ragas dataset...")
     dataframe_to_ragas_dataset(dataframe)
+    logger.info("✓ Dataset saved successfully to data/ragas_dataset.jsonl")
 
 
 if __name__ == "__main__":
-    # Parse parameter the script was called with (URL)
-    parser = argparse.ArgumentParser(
-        description="Download provided dataset -> convert to Ragas dataset -> save to data/datasets/ragas_dataset.jsonl"
-    )
-    parser.add_argument(
-        "url",
-        help="URL to the dataset in .csv / .json / .parquet format (must have user_input, retrieved_contexts, and reference columns)",
-    )
-    args = parser.parse_args()
 
-    # Call main using the parsed URL
-    main(args.url)
+
+    # Call main using the parsed bucket and key
+    main("datasets", "dataset.json")

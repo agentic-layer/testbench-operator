@@ -1,6 +1,6 @@
 """
 End-to-end test that runs all scripts in the correct order:
-1. setup.py - Downloads, converts and saves Ragas Dataset to data/datasets/ragas_dataset.jsonl
+1. setup.py - Downloads dataset from S3, converts and saves Ragas Dataset to data/datasets/ragas_dataset.jsonl
 2. run.py - Runs agent queries on the dataset and saves Ragas Experiment to data/experiments/ragas_experiment.jsonl
 3. evaluate.py - Evaluates results using RAGAS metrics and saves result to results/evaluation_scores.json
 4. publish.py - Publishes metrics via OpenTelemetry OTLP
@@ -32,14 +32,16 @@ class E2ETestRunner:
 
     def __init__(
         self,
-        dataset_url: str,
+        dataset_bucket: str,
+        dataset_key: str,
         agent_url: str,
         model: str,
         metrics: List[str],
         workflow_name: str,
         otlp_endpoint: str = "localhost:4318",
     ):
-        self.dataset_url = dataset_url
+        self.dataset_bucket = dataset_bucket
+        self.dataset_key = dataset_key
         self.agent_url = agent_url
         self.model = model
         self.metrics = metrics
@@ -136,9 +138,16 @@ class E2ETestRunner:
             return False
 
     def run_setup(self) -> bool:
-        """Run setup.py to download and convert dataset."""
-        command = ["python3", str(self.setup_script), self.dataset_url]
-        success = self.run_command(command, "1. Setup - Download Dataset")
+        """Run setup.py to download and convert dataset from S3."""
+        command = [
+            "python3",
+            str(self.setup_script),
+            "--bucket",
+            self.dataset_bucket,
+            "--key",
+            self.dataset_key,
+        ]
+        success = self.run_command(command, "1. Setup - Download Dataset from S3")
 
         if success:
             return self.verify_file_exists(self.dataset_file, "setup.py")
@@ -231,7 +240,8 @@ def test_e2e_pipeline():
     import os
 
     # Get configuration from environment variables with sensible defaults
-    dataset_url = os.getenv("E2E_DATASET_URL", "http://localhost:8000/dataset.json")
+    dataset_bucket = os.getenv("E2E_DATASET_BUCKET", "datasets")
+    dataset_key = os.getenv("E2E_DATASET_KEY", "dataset.json")
     agent_url = os.getenv("E2E_AGENT_URL", "http://localhost:11010")
     model = os.getenv("E2E_MODEL", "gemini-2.5-flash-lite")
     metrics_str = os.getenv("E2E_METRICS", "faithfulness")
@@ -241,7 +251,8 @@ def test_e2e_pipeline():
 
     # Create and run the test pipeline
     runner = E2ETestRunner(
-        dataset_url=dataset_url,
+        dataset_bucket=dataset_bucket,
+        dataset_key=dataset_key,
         agent_url=agent_url,
         model=model,
         metrics=metrics,
