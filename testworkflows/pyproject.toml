@@ -27,6 +27,7 @@ dependencies = [
 
 [tool.poe.tasks]
 test = "pytest tests/ -v"
+test_e2e = "pytest e2e_tests/ -v"
 
 format = "ruff format"
 lint = "ruff check --fix"
