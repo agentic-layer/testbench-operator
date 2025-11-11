@@ -38,7 +38,7 @@ jobs:
         python-version-file: "testworkflows/.python-version"
 
     - name: Install Dependencies
-      run: uv sync --all-packages
+      run: uv sync --group dev --group prod
 
     - name: Run Checks
       run: uv run poe check
