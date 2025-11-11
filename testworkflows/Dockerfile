@@ -5,8 +5,6 @@ WORKDIR /app
 # Install runtime and build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
-    gcc \
-    g++ \
     && rm -rf /var/lib/apt/lists/*
 
 # Install UV package manager
@@ -20,7 +18,7 @@ RUN uv sync --group prod
 
 # Copy application code
 COPY scripts/ ./scripts/
-COPY tests/ ./tests/
+COPY tests_e2e/ ./tests_e2e/
 
 # Create directories for data and results
 RUN mkdir -p data/datasets data/experiments results
@@ -30,7 +28,7 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
 # Make scripts executable
-RUN chmod +x scripts/*.py tests/*.py
+RUN chmod +x scripts/*.py tests_e2e/*.py
 
 # Default to Python shell for flexible script execution
 CMD ["python3"]
