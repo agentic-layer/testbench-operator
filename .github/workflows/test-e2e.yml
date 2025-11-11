@@ -1,3 +1,9 @@
+#
+# GitHub Action: E2E Tests
+#
+# This workflow is triggered on pushes to main and renovate branches, as well as
+# pull requests. It runs E2E Tests to ensure the code is working.
+#
 name: E2E Tests
 
 on:
@@ -69,5 +75,5 @@ jobs:
           echo "Waiting for test-data-server (HTTP server on port 8000)..."
           curl --retry 30 --retry-delay 2 --retry-connrefused -f http://localhost:8000/dataset.json > /dev/null
 
-      - name: Run E2E Test
+      - name: Running Test e2e
         run: uv run poe test_e2e
