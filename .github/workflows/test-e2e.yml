@@ -7,32 +7,67 @@ on:
       - 'renovate/**'
   pull_request:
 
+env:
+  # Required environment variables for the E2E test
+  GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+  OPENAI_API_KEY: PLACEHOLDER
+
 jobs:
-  test-e2e:
+  test:
     name: Run on Ubuntu
     runs-on: ubuntu-latest
-    permissions:
-      contents: 'read'
+
+    defaults:
+      run:
+        working-directory: testworkflows
 
     steps:
       - name: Clone the code
-        uses: actions/checkout@v5
+        uses: 'actions/checkout@v5'
 
-      - name: Setup Go
-        uses: actions/setup-go@v6
+      - name: Install uv
+        uses: 'astral-sh/setup-uv@v6'
         with:
-          go-version-file: go.mod
+          version: "0.8.17"
+          enable-cache: true
 
-      - name: Install the latest version of kind
+      - name: Setup Python
+        uses: 'actions/setup-python@v6'
+        with:
+          python-version-file: "testworkflows/.python-version"
+
+      - name: Install Dependencies
+        run: uv sync --all-packages
+
+      - name: Set up Kubernetes (kind)
+        uses: 'helm/kind-action@v1'
+        with:
+          cluster_name: testbench-cluster
+
+      - name: Install Tilt
         run: |
-          curl -Lo ./kind https://kind.sigs.k8s.io/dl/latest/kind-linux-amd64
-          chmod +x ./kind
-          sudo mv ./kind /usr/local/bin/kind
+          curl -fsSL https://raw.githubusercontent.com/tilt-dev/tilt/master/scripts/install.sh | bash
+          tilt version
 
-      - name: Verify kind installation
-        run: kind version
+      - name: Start test data server
+        run: uv run python -m http.server 8000 --directory tests/test_data &
 
-      - name: Running Test e2e
+      - name: Start Tiltfile services
+        run: tilt ci
+        working-directory: .
+
+      - name: Wait for services to be ready
         run: |
-          go mod tidy
-          make test-e2e
+          echo "Waiting for services to be ready..."
+          kubectl wait --for=condition=ready pod -l app=weather-agent --timeout=300s || true
+          kubectl wait --for=condition=ready pod -l app=ai-gateway-litellm --timeout=300s || true
+          kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=lgtm --timeout=300s || true
+          
+          echo "Checking service status..."
+          kubectl get pods -A
+          
+          echo "Waiting for test-data-server (HTTP server on port 8000)..."
+          curl --retry 30 --retry-delay 2 --retry-connrefused -f http://localhost:8000/dataset.json > /dev/null
+
+      - name: Run E2E Test
+        run: uv run poe test_e2e
