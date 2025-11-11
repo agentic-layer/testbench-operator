@@ -1,41 +1,26 @@
-# Install dependencies
-FROM python:3.13-slim AS builder
+FROM python:3.13-slim
 
 WORKDIR /app
 
-# Install build dependencies for compiling Python packages
+# Install runtime and build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
     gcc \
     g++ \
     && rm -rf /var/lib/apt/lists/*
 
-# Install UV package manager for fast dependency installation
-RUN pip install --no-cache-dir uv
+# Install UV package manager
+COPY --from=ghcr.io/astral-sh/uv:0.9 /uv /bin/uv
 
 # Copy dependency files
 COPY pyproject.toml uv.lock ./
 
 # Install dependencies using UV
-RUN uv pip install --system --no-cache -r pyproject.toml
-
-
-FROM python:3.13-slim
-
-WORKDIR /app
-
-# Install runtime dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    git \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy installed packages from builder stage
-COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
+RUN uv sync --group prod
 
 # Copy application code
 COPY scripts/ ./scripts/
 COPY tests/ ./tests/
-COPY pyproject.toml ./
 
 # Create directories for data and results
 RUN mkdir -p data/datasets data/experiments results
@@ -44,7 +29,7 @@ RUN mkdir -p data/datasets data/experiments results
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
-# Make scripts executable (if needed)
+# Make scripts executable
 RUN chmod +x scripts/*.py tests/*.py
 
 # Default to Python shell for flexible script execution
