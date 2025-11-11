@@ -4,18 +4,17 @@ Unit tests for evaluate.py
 Tests the RAGAS evaluation functionality.
 """
 
-import os
 import json
+import os
 import shutil
 import sys
 import tempfile
 from argparse import ArgumentError
 from pathlib import Path
-from ragas.metrics import Metric
-from evaluate import convert_metrics
 
 import pandas as pd
 import pytest
+from ragas.metrics import Metric
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
@@ -280,6 +279,7 @@ def test_available_metrics_loaded():
 # TestConvertMetrics tests
 def test_convert_metrics_with_valid_metrics():
     """Test that convert_metrics correctly converts valid metric names to objects"""
+    from evaluate import convert_metrics
 
     # Use metrics that are commonly available in RAGAS
     metric_names = ["faithfulness", "answer_relevancy"]
@@ -302,6 +302,7 @@ def test_convert_metrics_with_valid_metrics():
 
 def test_convert_metrics_with_invalid_metrics():
     """Test that convert_metrics handles invalid metric names"""
+    from evaluate import convert_metrics
 
     # Test with only invalid metrics - should raise ValueError
     with pytest.raises(ValueError, match="No valid metrics provided"):
@@ -310,6 +311,7 @@ def test_convert_metrics_with_invalid_metrics():
 
 def test_convert_metrics_mixed_valid_invalid():
     """Test convert_metrics with mixed valid and invalid metric names"""
+    from evaluate import convert_metrics
 
     # Get one valid metric name from AVAILABLE_METRICS
     if not AVAILABLE_METRICS:
@@ -322,7 +324,5 @@ def test_convert_metrics_mixed_valid_invalid():
 
     # Should only return the valid metric
     assert len(metric_objects) == 1
-
-
 
     assert isinstance(metric_objects[0], Metric)
