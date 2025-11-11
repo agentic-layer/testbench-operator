@@ -18,7 +18,7 @@ from ragas.metrics import Metric
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from evaluate import AVAILABLE_METRICS, format_evaluation_scores, main
+from evaluate import AVAILABLE_METRICS, convert_metrics, format_evaluation_scores, main
 
 
 # Fixtures
@@ -279,7 +279,6 @@ def test_available_metrics_loaded():
 # TestConvertMetrics tests
 def test_convert_metrics_with_valid_metrics():
     """Test that convert_metrics correctly converts valid metric names to objects"""
-    from evaluate import convert_metrics
 
     # Use metrics that are commonly available in RAGAS
     metric_names = ["faithfulness", "answer_relevancy"]
@@ -302,7 +301,6 @@ def test_convert_metrics_with_valid_metrics():
 
 def test_convert_metrics_with_invalid_metrics():
     """Test that convert_metrics handles invalid metric names"""
-    from evaluate import convert_metrics
 
     # Test with only invalid metrics - should raise ValueError
     with pytest.raises(ValueError, match="No valid metrics provided"):
@@ -311,7 +309,6 @@ def test_convert_metrics_with_invalid_metrics():
 
 def test_convert_metrics_mixed_valid_invalid():
     """Test convert_metrics with mixed valid and invalid metric names"""
-    from evaluate import convert_metrics
 
     # Get one valid metric name from AVAILABLE_METRICS
     if not AVAILABLE_METRICS:
