@@ -8,296 +8,428 @@ import json
 import shutil
 import sys
 import tempfile
-import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 from publish import create_and_push_metrics, get_overall_scores, publish_metrics
 
 
-class TestGetOverallScores(unittest.TestCase):
-    """Test the get_overall_scores function"""
-
-    def setUp(self):
-        """Set up temporary directory and test file"""
-        self.temp_dir = tempfile.mkdtemp()
-        self.test_file = Path(self.temp_dir) / "evaluation_scores.json"
-
-    def tearDown(self):
-        """Clean up temporary directory"""
-        shutil.rmtree(self.temp_dir, ignore_errors=True)
-
-    def test_loads_overall_scores(self):
-        """Test that get_overall_scores loads the overall_scores section"""
-        test_data = {
-            "overall_scores": {"faithfulness": 0.85, "answer_relevancy": 0.90},
-            "individual_results": [],
-            "total_tokens": {"input_tokens": 0, "output_tokens": 0},
-            "total_cost": 0.0,
-        }
-
-        with open(self.test_file, "w") as f:
-            json.dump(test_data, f)
-
-        scores = get_overall_scores(str(self.test_file))
-
-        self.assertEqual(scores["faithfulness"], 0.85)
-        self.assertEqual(scores["answer_relevancy"], 0.90)
-
-    def test_file_not_found(self):
-        """Test behavior when file doesn't exist"""
-        with self.assertRaises(FileNotFoundError):
-            get_overall_scores(str(Path(self.temp_dir) / "nonexistent.json"))
+# Fixtures
+@pytest.fixture
+def temp_dir():
+    """Create a temporary directory for tests"""
+    tmp = tempfile.mkdtemp()
+    yield tmp
+    shutil.rmtree(tmp, ignore_errors=True)
 
 
-class TestCreateAndPushMetrics(unittest.TestCase):
-    """Test the create_and_push_metrics function"""
+@pytest.fixture
+def evaluation_scores_file(temp_dir):
+    """Create a test evaluation scores file"""
+    test_file = Path(temp_dir) / "evaluation_scores.json"
+    test_data = {
+        "overall_scores": {"faithfulness": 0.85, "answer_relevancy": 0.90},
+        "individual_results": [],
+        "total_tokens": {"input_tokens": 0, "output_tokens": 0},
+        "total_cost": 0.0,
+    }
 
-    @patch("publish.OTLPMetricExporter")
-    @patch("publish.MeterProvider")
-    @patch("publish.metrics.get_meter")
-    def test_creates_gauges_for_each_metric(self, mock_get_meter, mock_provider_class, mock_exporter_class):
-        """Test that a Gauge is created for each metric"""
-        overall_scores = {"faithfulness": 0.85, "answer_relevancy": 0.90}
+    with open(test_file, "w") as f:
+        json.dump(test_data, f)
 
-        # Mock the meter and gauge
-        mock_gauge = MagicMock()
-        mock_meter = MagicMock()
-        mock_meter.create_gauge.return_value = mock_gauge
-        mock_get_meter.return_value = mock_meter
+    return test_file
 
-        # Mock the provider
-        mock_provider = MagicMock()
-        mock_provider_class.return_value = mock_provider
 
+@pytest.fixture
+def realistic_scores_file(temp_dir):
+    """Create a realistic evaluation scores file"""
+    test_file = Path(temp_dir) / "evaluation_scores.json"
+    test_data = {
+        "overall_scores": {
+            "faithfulness": 0.8523,
+            "answer_relevancy": 0.9012,
+            "context_precision": 0.7845,
+            "context_recall": 0.8234,
+        },
+        "individual_results": [
+            {
+                "user_input": "What is the weather?",
+                "response": "It is sunny.",
+                "faithfulness": 0.85,
+                "answer_relevancy": 0.90,
+            }
+        ],
+        "total_tokens": {"input_tokens": 0, "output_tokens": 0},
+        "total_cost": 0.0,
+    }
+
+    with open(test_file, "w") as f:
+        json.dump(test_data, f, indent=2)
+
+    return test_file
+
+
+# TestGetOverallScores tests
+def test_loads_overall_scores(evaluation_scores_file):
+    """Test that get_overall_scores loads the overall_scores section"""
+    scores = get_overall_scores(str(evaluation_scores_file))
+
+    assert scores["faithfulness"] == 0.85
+    assert scores["answer_relevancy"] == 0.90
+
+
+def test_file_not_found(temp_dir):
+    """Test behavior when file doesn't exist"""
+    with pytest.raises(FileNotFoundError):
+        get_overall_scores(str(Path(temp_dir) / "nonexistent.json"))
+
+
+# TestCreateAndPushMetrics tests
+def test_creates_gauges_for_each_metric(monkeypatch):
+    """Test that a Gauge is created for each metric"""
+    overall_scores = {"faithfulness": 0.85, "answer_relevancy": 0.90}
+
+    # Mock the meter and gauge
+    create_gauge_calls = []
+
+    class MockGauge:
+        def set(self, value, attributes):
+            pass
+
+    class MockMeter:
+        def create_gauge(self, name, unit=None, description=None):
+            create_gauge_calls.append({"name": name, "unit": unit, "description": description})
+            return MockGauge()
+
+    mock_meter = MockMeter()
+
+    def mock_get_meter(*args, **kwargs):
+        return mock_meter
+
+    # Mock the provider
+    class MockProvider:
+        def force_flush(self):
+            pass
+
+        def shutdown(self):
+            pass
+
+    def mock_provider_init(**kwargs):
+        return MockProvider()
+
+    # Mock the exporter
+    class MockExporter:
+        _preferred_temporality = {}
+        _preferred_aggregation = {}
+
+    def mock_exporter_init(endpoint):
+        return MockExporter()
+
+    monkeypatch.setattr("publish.metrics.get_meter", mock_get_meter)
+    monkeypatch.setattr("publish.MeterProvider", mock_provider_init)
+    monkeypatch.setattr("publish.OTLPMetricExporter", mock_exporter_init)
+
+    create_and_push_metrics(
+        overall_scores=overall_scores,
+        workflow_name="test-workflow",
+        otlp_endpoint="localhost:4318",
+    )
+
+    # Verify create_gauge was called for each metric
+    assert len(create_gauge_calls) == 2
+
+    # Verify gauge names
+    gauge_names = [call["name"] for call in create_gauge_calls]
+    assert "ragas_evaluation_faithfulness" in gauge_names
+    assert "ragas_evaluation_answer_relevancy" in gauge_names
+
+
+def test_sets_gauge_values(monkeypatch):
+    """Test that gauge values are set correctly"""
+    overall_scores = {"faithfulness": 0.85}
+
+    # Mock the meter and gauge
+    set_calls = []
+
+    class MockGauge:
+        def set(self, value, attributes):
+            set_calls.append({"value": value, "attributes": attributes})
+
+    class MockMeter:
+        def create_gauge(self, name, unit=None, description=None):
+            return MockGauge()
+
+    mock_meter = MockMeter()
+
+    def mock_get_meter(*args, **kwargs):
+        return mock_meter
+
+    # Mock the provider
+    class MockProvider:
+        def force_flush(self):
+            pass
+
+        def shutdown(self):
+            pass
+
+    def mock_provider_init(**kwargs):
+        return MockProvider()
+
+    # Mock the exporter
+    class MockExporter:
+        _preferred_temporality = {}
+        _preferred_aggregation = {}
+
+    def mock_exporter_init(endpoint):
+        return MockExporter()
+
+    monkeypatch.setattr("publish.metrics.get_meter", mock_get_meter)
+    monkeypatch.setattr("publish.MeterProvider", mock_provider_init)
+    monkeypatch.setattr("publish.OTLPMetricExporter", mock_exporter_init)
+
+    create_and_push_metrics(
+        overall_scores=overall_scores,
+        workflow_name="test-workflow",
+        otlp_endpoint="localhost:4318",
+    )
+
+    # Verify gauge.set was called with correct value and attributes
+    assert len(set_calls) == 1
+    assert set_calls[0]["value"] == 0.85
+    assert set_calls[0]["attributes"] == {"workflow_name": "test-workflow"}
+
+
+def test_pushes_via_otlp(monkeypatch):
+    """Test that metrics are pushed via OTLP"""
+    overall_scores = {"faithfulness": 0.85}
+
+    # Mock the meter and gauge
+    class MockGauge:
+        def set(self, value, attributes):
+            pass
+
+    class MockMeter:
+        def create_gauge(self, name, unit=None, description=None):
+            return MockGauge()
+
+    mock_meter = MockMeter()
+
+    def mock_get_meter(*args, **kwargs):
+        return mock_meter
+
+    # Mock the provider
+    force_flush_calls = []
+    shutdown_calls = []
+
+    class MockProvider:
+        def force_flush(self):
+            force_flush_calls.append(True)
+
+        def shutdown(self):
+            shutdown_calls.append(True)
+
+    def mock_provider_init(**kwargs):
+        return MockProvider()
+
+    # Mock the exporter
+    class MockExporter:
+        _preferred_temporality = {}
+        _preferred_aggregation = {}
+
+    exporter_calls = []
+
+    def mock_exporter_init(endpoint):
+        exporter_calls.append({"endpoint": endpoint})
+        return MockExporter()
+
+    monkeypatch.setattr("publish.metrics.get_meter", mock_get_meter)
+    monkeypatch.setattr("publish.MeterProvider", mock_provider_init)
+    monkeypatch.setattr("publish.OTLPMetricExporter", mock_exporter_init)
+
+    create_and_push_metrics(
+        overall_scores=overall_scores,
+        workflow_name="test-workflow",
+        otlp_endpoint="localhost:4318",
+    )
+
+    # Verify OTLPMetricExporter was initialized with correct endpoint
+    assert len(exporter_calls) == 1
+    assert exporter_calls[0]["endpoint"] == "http://localhost:4318/v1/metrics"
+
+    # Verify force_flush and shutdown were called
+    assert len(force_flush_calls) == 1
+    assert len(shutdown_calls) == 1
+
+
+def test_handles_push_error(monkeypatch):
+    """Test error handling when OTLP export fails"""
+    overall_scores = {"faithfulness": 0.85}
+
+    # Mock the meter and gauge
+    class MockGauge:
+        def set(self, value, attributes):
+            pass
+
+    class MockMeter:
+        def create_gauge(self, name, unit=None, description=None):
+            return MockGauge()
+
+    mock_meter = MockMeter()
+
+    def mock_get_meter(*args, **kwargs):
+        return mock_meter
+
+    # Mock the provider to raise an exception on force_flush
+    shutdown_calls = []
+
+    class MockProvider:
+        def force_flush(self):
+            raise Exception("Connection refused")
+
+        def shutdown(self):
+            shutdown_calls.append(True)
+
+    def mock_provider_init(**kwargs):
+        return MockProvider()
+
+    # Mock the exporter
+    class MockExporter:
+        _preferred_temporality = {}
+        _preferred_aggregation = {}
+
+    def mock_exporter_init(endpoint):
+        return MockExporter()
+
+    monkeypatch.setattr("publish.metrics.get_meter", mock_get_meter)
+    monkeypatch.setattr("publish.MeterProvider", mock_provider_init)
+    monkeypatch.setattr("publish.OTLPMetricExporter", mock_exporter_init)
+
+    with pytest.raises(Exception, match="Connection refused"):
         create_and_push_metrics(
             overall_scores=overall_scores,
             workflow_name="test-workflow",
             otlp_endpoint="localhost:4318",
         )
 
-        # Verify create_gauge was called for each metric
-        self.assertEqual(mock_meter.create_gauge.call_count, 2)
+    # Verify shutdown is still called in finally block
+    assert len(shutdown_calls) == 1
 
-        # Verify gauge names
-        gauge_calls = mock_meter.create_gauge.call_args_list
-        gauge_names = [call[1]["name"] for call in gauge_calls]
-        self.assertIn("ragas_evaluation_faithfulness", gauge_names)
-        self.assertIn("ragas_evaluation_answer_relevancy", gauge_names)
 
-    @patch("publish.OTLPMetricExporter")
-    @patch("publish.MeterProvider")
-    @patch("publish.metrics.get_meter")
-    def test_sets_gauge_values(self, mock_get_meter, mock_provider_class, mock_exporter_class):
-        """Test that gauge values are set correctly"""
-        overall_scores = {"faithfulness": 0.85}
+# TestPublishMetrics tests
+def test_publish_metrics_calls_create_and_push(evaluation_scores_file, monkeypatch):
+    """Test that publish_metrics calls create_and_push_metrics"""
+    create_push_calls = []
 
-        # Mock the meter and gauge
-        mock_gauge = MagicMock()
-        mock_meter = MagicMock()
-        mock_meter.create_gauge.return_value = mock_gauge
-        mock_get_meter.return_value = mock_meter
-
-        # Mock the provider
-        mock_provider = MagicMock()
-        mock_provider_class.return_value = mock_provider
-
-        create_and_push_metrics(
-            overall_scores=overall_scores,
-            workflow_name="test-workflow",
-            otlp_endpoint="localhost:4318",
+    def mock_create_push(overall_scores, workflow_name, otlp_endpoint):
+        create_push_calls.append(
+            {
+                "overall_scores": overall_scores,
+                "workflow_name": workflow_name,
+                "otlp_endpoint": otlp_endpoint,
+            }
         )
 
-        # Verify gauge.set was called with correct value and attributes
-        mock_gauge.set.assert_called_once_with(0.85, {"workflow_name": "test-workflow"})
+    monkeypatch.setattr("publish.create_and_push_metrics", mock_create_push)
 
-    @patch("publish.OTLPMetricExporter")
-    @patch("publish.MeterProvider")
-    @patch("publish.metrics.get_meter")
-    def test_pushes_via_otlp(self, mock_get_meter, mock_provider_class, mock_exporter_class):
-        """Test that metrics are pushed via OTLP"""
-        overall_scores = {"faithfulness": 0.85}
+    publish_metrics(
+        input_file=str(evaluation_scores_file),
+        workflow_name="test-workflow",
+        otlp_endpoint="localhost:4318",
+    )
 
-        # Mock the meter and gauge
-        mock_gauge = MagicMock()
-        mock_meter = MagicMock()
-        mock_meter.create_gauge.return_value = mock_gauge
-        mock_get_meter.return_value = mock_meter
+    # Verify create_and_push_metrics was called
+    assert len(create_push_calls) == 1
 
-        # Mock the provider
-        mock_provider = MagicMock()
-        mock_provider_class.return_value = mock_provider
-
-        create_and_push_metrics(
-            overall_scores=overall_scores,
-            workflow_name="test-workflow",
-            otlp_endpoint="localhost:4318",
-        )
-
-        # Verify OTLPMetricExporter was initialized with correct endpoint
-        mock_exporter_class.assert_called_once_with(endpoint="http://localhost:4318/v1/metrics")
-
-        # Verify force_flush and shutdown were called
-        mock_provider.force_flush.assert_called_once()
-        mock_provider.shutdown.assert_called_once()
-
-    @patch("publish.OTLPMetricExporter")
-    @patch("publish.MeterProvider")
-    @patch("publish.metrics.get_meter")
-    def test_handles_push_error(self, mock_get_meter, mock_provider_class, mock_exporter_class):
-        """Test error handling when OTLP export fails"""
-        # Mock the provider to raise an exception on force_flush
-        mock_provider = MagicMock()
-        mock_provider.force_flush.side_effect = Exception("Connection refused")
-        mock_provider_class.return_value = mock_provider
-
-        # Mock the meter
-        mock_gauge = MagicMock()
-        mock_meter = MagicMock()
-        mock_meter.create_gauge.return_value = mock_gauge
-        mock_get_meter.return_value = mock_meter
-
-        overall_scores = {"faithfulness": 0.85}
-
-        with self.assertRaises(Exception) as context:
-            create_and_push_metrics(
-                overall_scores=overall_scores,
-                workflow_name="test-workflow",
-                otlp_endpoint="localhost:4318",
-            )
-
-        self.assertIn("Connection refused", str(context.exception))
-
-        # Verify shutdown is still called in finally block
-        mock_provider.shutdown.assert_called_once()
+    # Verify parameters
+    assert create_push_calls[0]["overall_scores"]["faithfulness"] == 0.85
+    assert create_push_calls[0]["overall_scores"]["answer_relevancy"] == 0.90
+    assert create_push_calls[0]["workflow_name"] == "test-workflow"
+    assert create_push_calls[0]["otlp_endpoint"] == "localhost:4318"
 
 
-class TestPublishMetrics(unittest.TestCase):
-    """Test the publish_metrics function"""
+def test_publish_metrics_with_empty_scores(temp_dir, monkeypatch):
+    """Test behavior when overall_scores is empty"""
+    # Create file with empty overall_scores
+    test_data = {"overall_scores": {}, "individual_results": []}
 
-    def setUp(self):
-        """Set up temporary directory and test file"""
-        self.temp_dir = tempfile.mkdtemp()
-        self.test_file = Path(self.temp_dir) / "evaluation_scores.json"
+    empty_file = Path(temp_dir) / "empty_scores.json"
+    with open(empty_file, "w") as f:
+        json.dump(test_data, f)
 
-        # Create test evaluation scores file
-        test_data = {
-            "overall_scores": {"faithfulness": 0.85, "answer_relevancy": 0.90},
-            "individual_results": [],
-            "total_tokens": {"input_tokens": 0, "output_tokens": 0},
-            "total_cost": 0.0,
-        }
+    create_push_calls = []
 
-        with open(self.test_file, "w") as f:
-            json.dump(test_data, f)
+    def mock_create_push(overall_scores, workflow_name, otlp_endpoint):
+        create_push_calls.append(True)
 
-    def tearDown(self):
-        """Clean up temporary directory"""
-        shutil.rmtree(self.temp_dir, ignore_errors=True)
+    monkeypatch.setattr("publish.create_and_push_metrics", mock_create_push)
 
-    @patch("publish.create_and_push_metrics")
-    def test_publish_metrics_calls_create_and_push(self, mock_create_push):
-        """Test that publish_metrics calls create_and_push_metrics"""
-        publish_metrics(
-            input_file=str(self.test_file),
-            workflow_name="test-workflow",
-            otlp_endpoint="localhost:4318",
-        )
+    publish_metrics(
+        input_file=str(empty_file),
+        workflow_name="test-workflow",
+        otlp_endpoint="localhost:4318",
+    )
 
-        # Verify create_and_push_metrics was called
-        mock_create_push.assert_called_once()
-
-        # Verify parameters (positional arguments)
-        call_args = mock_create_push.call_args
-        self.assertEqual(call_args[0][0]["faithfulness"], 0.85)
-        self.assertEqual(call_args[0][0]["answer_relevancy"], 0.90)
-        self.assertEqual(call_args[0][1], "test-workflow")
-        self.assertEqual(call_args[0][2], "localhost:4318")
-
-    @patch("publish.create_and_push_metrics")
-    def test_publish_metrics_with_empty_scores(self, mock_create_push):
-        """Test behavior when overall_scores is empty"""
-        # Create file with empty overall_scores
-        test_data = {"overall_scores": {}, "individual_results": []}
-
-        empty_file = Path(self.temp_dir) / "empty_scores.json"
-        with open(empty_file, "w") as f:
-            json.dump(test_data, f)
-
-        publish_metrics(
-            input_file=str(empty_file),
-            workflow_name="test-workflow",
-            otlp_endpoint="localhost:4318",
-        )
-
-        # Verify create_and_push_metrics was NOT called
-        mock_create_push.assert_not_called()
+    # Verify create_and_push_metrics was NOT called
+    assert len(create_push_calls) == 0
 
 
-class TestIntegrationWithTestData(unittest.TestCase):
-    """Integration tests with realistic evaluation data"""
+# TestIntegrationWithTestData tests
+def test_publish_realistic_scores(realistic_scores_file, monkeypatch):
+    """Test publishing realistic evaluation scores"""
+    # Mock the meter and gauge
+    create_gauge_calls = []
 
-    def setUp(self):
-        """Set up temporary directory with realistic test data"""
-        self.temp_dir = tempfile.mkdtemp()
-        self.test_file = Path(self.temp_dir) / "evaluation_scores.json"
+    class MockGauge:
+        def set(self, value, attributes):
+            pass
 
-        # Create realistic evaluation scores
-        test_data = {
-            "overall_scores": {
-                "faithfulness": 0.8523,
-                "answer_relevancy": 0.9012,
-                "context_precision": 0.7845,
-                "context_recall": 0.8234,
-            },
-            "individual_results": [
-                {
-                    "user_input": "What is the weather?",
-                    "response": "It is sunny.",
-                    "faithfulness": 0.85,
-                    "answer_relevancy": 0.90,
-                }
-            ],
-            "total_tokens": {"input_tokens": 0, "output_tokens": 0},
-            "total_cost": 0.0,
-        }
+    class MockMeter:
+        def create_gauge(self, name, unit=None, description=None):
+            create_gauge_calls.append({"name": name})
+            return MockGauge()
 
-        with open(self.test_file, "w") as f:
-            json.dump(test_data, f, indent=2)
+    mock_meter = MockMeter()
 
-    def tearDown(self):
-        """Clean up temporary directory"""
-        shutil.rmtree(self.temp_dir, ignore_errors=True)
+    def mock_get_meter(*args, **kwargs):
+        return mock_meter
 
-    @patch("publish.OTLPMetricExporter")
-    @patch("publish.MeterProvider")
-    @patch("publish.metrics.get_meter")
-    def test_publish_realistic_scores(self, mock_get_meter, mock_provider_class, mock_exporter_class):
-        """Test publishing realistic evaluation scores"""
-        # Mock the meter and gauge
-        mock_gauge = MagicMock()
-        mock_meter = MagicMock()
-        mock_meter.create_gauge.return_value = mock_gauge
-        mock_get_meter.return_value = mock_meter
+    # Mock the provider
+    class MockProvider:
+        def force_flush(self):
+            pass
 
-        # Mock the provider
-        mock_provider = MagicMock()
-        mock_provider_class.return_value = mock_provider
+        def shutdown(self):
+            pass
 
-        publish_metrics(
-            input_file=str(self.test_file),
-            workflow_name="weather-assistant-test",
-            otlp_endpoint="localhost:4318",
-        )
+    def mock_provider_init(**kwargs):
+        return MockProvider()
 
-        # Verify OTLPMetricExporter was called
-        mock_exporter_class.assert_called_once()
+    # Mock the exporter
+    class MockExporter:
+        _preferred_temporality = {}
+        _preferred_aggregation = {}
 
-        # Verify 4 metrics were created (faithfulness, answer_relevancy, context_precision, context_recall)
-        self.assertEqual(mock_meter.create_gauge.call_count, 4)
+    exporter_calls = []
 
+    def mock_exporter_init(endpoint):
+        exporter_calls.append(True)
+        return MockExporter()
 
-if __name__ == "__main__":
-    unittest.main()
+    monkeypatch.setattr("publish.metrics.get_meter", mock_get_meter)
+    monkeypatch.setattr("publish.MeterProvider", mock_provider_init)
+    monkeypatch.setattr("publish.OTLPMetricExporter", mock_exporter_init)
+
+    publish_metrics(
+        input_file=str(realistic_scores_file),
+        workflow_name="weather-assistant-test",
+        otlp_endpoint="localhost:4318",
+    )
+
+    # Verify OTLPMetricExporter was called
+    assert len(exporter_calls) == 1
+
+    # Verify 4 metrics were created (faithfulness, answer_relevancy, context_precision, context_recall)
+    assert len(create_gauge_calls) == 4

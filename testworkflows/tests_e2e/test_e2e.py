@@ -17,8 +17,9 @@ Usage:
     pytest tests/test_e2e.py
 """
 
+import os
 import logging
-import subprocess
+import subprocess  # nosec
 from pathlib import Path
 from typing import List
 
@@ -96,7 +97,7 @@ class E2ETestRunner:
         logger.info(f"{'=' * 60}\n")
 
         try:
-            result = subprocess.run(command, check=True, capture_output=True, text=True)
+            result = subprocess.run(command, check=True, capture_output=True, text=True)  # nosec
 
             # Log stdout if present
             if result.stdout:
@@ -228,7 +229,6 @@ def test_e2e_pipeline():
     Example:
         E2E_DATASET_URL="https://example.com/data.csv" pytest tests/test_e2e.py
     """
-    import os
 
     # Get configuration from environment variables with sensible defaults
     dataset_url = os.getenv("E2E_DATASET_URL", "http://localhost:8000/dataset.json")
