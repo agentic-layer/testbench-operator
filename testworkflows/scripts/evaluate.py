@@ -209,15 +209,15 @@ if __name__ == "__main__":
             Available metrics: {", ".join(AVAILABLE_METRICS.keys())}
 
             Examples:
-            python3 scripts/evaluate.py gemini-flash-latest faithfulness
-            python3 scripts/evaluate.py gemini-flash-latest faithfulness context_precision context_recall
+            python3 scripts/evaluate.py gemini-2.5-flash-lite faithfulness
+            python3 scripts/evaluate.py gemini-2.5-flash-lite faithfulness context_precision context_recall
         """,
     )
 
     parser.add_argument(
         "model",
         type=str,
-        help="Model name to use for evaluation (e.g., gemini-flash-latest)",
+        help="Model name to use for evaluation (e.g., gemini-2.5-flash-lite)",
     )
 
     parser.add_argument(
