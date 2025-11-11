@@ -4,189 +4,210 @@ Unit tests for run.py
 Tests the agent query execution and experiment functionality.
 """
 
+import os
 import shutil
 import sys
 import tempfile
-import unittest
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 from run import initialize_client, main, run_agent_experiment
 
 
-class TestInitializeClient(unittest.TestCase):
-    """Test the initialize_client function"""
-
-    @patch("run.ClientFactory")
-    @patch("run.minimal_agent_card")
-    async def test_initialize_client_creates_client(self, mock_agent_card, mock_factory):
-        """Test that initialize_client creates a client correctly"""
-        # Mock the agent card
-        mock_card = MagicMock()
-        mock_agent_card.return_value = mock_card
-
-        # Mock the factory and client
-        mock_client = MagicMock()
-        mock_factory_instance = MagicMock()
-        mock_factory_instance.create.return_value = mock_client
-        mock_factory.return_value = mock_factory_instance
-
-        # Call the function
-        result = await initialize_client("http://test-agent:8000")
-
-        # Verify
-        mock_agent_card.assert_called_once_with("http://test-agent:8000")
-        mock_factory_instance.create.assert_called_once_with(mock_card)
-        self.assertEqual(result, mock_client)
+# Fixtures
+@pytest.fixture
+def temp_dir():
+    """Create a temporary directory for tests"""
+    tmp = tempfile.mkdtemp()
+    original_cwd = Path.cwd()
+    yield tmp, original_cwd
+    shutil.rmtree(tmp, ignore_errors=True)
 
 
-class TestRunAgentExperiment(unittest.TestCase):
-    """Test the run_agent_experiment function"""
+# TestInitializeClient tests
+@pytest.mark.asyncio
+async def test_initialize_client_creates_client(monkeypatch):
+    """Test that initialize_client creates a client correctly"""
 
-    def setUp(self):
-        """Set up temporary directory for experiment outputs"""
-        self.temp_dir = tempfile.mkdtemp()
-        self.original_cwd = Path.cwd()
+    # Mock the agent card
+    class MockCard:
+        pass
 
-    def tearDown(self):
-        """Clean up temporary directory"""
-        shutil.rmtree(self.temp_dir, ignore_errors=True)
+    mock_card = MockCard()
 
-    @patch("run.logging.getLogger")
-    @patch("run.initialize_client")
-    async def test_run_agent_experiment_success(self, mock_init_client, mock_get_logger):
-        """Test successful agent query execution"""
-        # Mock logger
-        mock_logger = MagicMock()
-        mock_get_logger.return_value = mock_logger
+    def mock_agent_card(url):
+        return mock_card
 
-        # Mock the client
-        mock_client = MagicMock()
+    # Mock the factory and client
+    class MockClient:
+        pass
 
-        # Create a mock task response
-        mock_task = MagicMock()
-        mock_task.model_dump.return_value = {
-            "artifacts": [{"parts": [{"text": "Agent response text"}]}],
-            "history": [],
-        }
+    mock_client = MockClient()
 
-        # Mock the async generator returned by send_message
-        async def mock_send_message(message):
+    class MockFactory:
+        def create(self, card):
+            return mock_client
+
+    def mock_factory_init(config=None):
+        return MockFactory()
+
+    monkeypatch.setattr("run.minimal_agent_card", mock_agent_card)
+    monkeypatch.setattr("run.ClientFactory", mock_factory_init)
+
+    # Call the function
+    result = await initialize_client("http://test-agent:8000")
+
+    # Verify
+    assert result == mock_client
+
+
+# TestRunAgentExperiment tests
+@pytest.mark.asyncio
+async def test_run_agent_experiment_success(monkeypatch):
+    """Test successful agent query execution"""
+
+    # Mock the client
+    class MockTask:
+        def model_dump(self, **kwargs):
+            return {
+                "artifacts": [{"parts": [{"text": "Agent response text"}]}],
+                "history": [],
+            }
+
+    mock_task = MockTask()
+
+    class MockClient:
+        async def send_message(self, message):
             yield (mock_task, None)
 
-        mock_client.send_message = mock_send_message
-        mock_init_client.return_value = mock_client
+    mock_client = MockClient()
 
-        # Create test row
-        test_row = {
-            "user_input": "What is the weather?",
-            "retrieved_contexts": ["Context about weather"],
-            "reference": "Expected answer",
-        }
+    async def mock_init_client(url):
+        return mock_client
 
-        # Mock httpx AsyncClient
-        with patch("run.httpx.AsyncClient") as mock_httpx:
-            mock_httpx_instance = AsyncMock()
-            mock_httpx_instance.__aenter__.return_value = mock_httpx_instance
-            mock_httpx_instance.__aexit__.return_value = None
-            mock_httpx.return_value = mock_httpx_instance
+    # Mock httpx AsyncClient
+    class MockAsyncClient:
+        async def __aenter__(self):
+            return self
 
-            # Create an async function that mimics the experiment function
-            async def test_experiment_func(row, agent_url):
-                return await run_agent_experiment.func(row, agent_url=agent_url)
+        async def __aexit__(self, exc_type, exc_val, exc_tb):
+            pass
 
-            # Call the function
-            result = await test_experiment_func(test_row, agent_url="http://test-agent:8000")
+    def mock_httpx_client():
+        return MockAsyncClient()
 
-        # Verify result structure
-        self.assertIn("user_input", result)
-        self.assertIn("retrieved_contexts", result)
-        self.assertIn("reference", result)
-        self.assertIn("response", result)
-        self.assertEqual(result["user_input"], "What is the weather?")
-        self.assertEqual(result["response"], "Agent response text")
+    monkeypatch.setattr("run.initialize_client", mock_init_client)
+    monkeypatch.setattr("run.httpx.AsyncClient", mock_httpx_client)
 
-    @patch("run.logging.getLogger")
-    @patch("run.initialize_client")
-    async def test_run_agent_experiment_error(self, mock_init_client, mock_get_logger):
-        """Test agent query with error handling"""
-        # Mock logger
-        mock_logger = MagicMock()
-        mock_get_logger.return_value = mock_logger
+    # Create test row
+    test_row = {
+        "user_input": "What is the weather?",
+        "retrieved_contexts": ["Context about weather"],
+        "reference": "Expected answer",
+    }
 
-        # Mock client that raises an error
-        mock_init_client.side_effect = Exception("Connection failed")
+    # Call the function
+    result = await run_agent_experiment.func(test_row, agent_url="http://test-agent:8000")
 
-        # Create test row
-        test_row = {
-            "user_input": "What is the weather?",
-            "retrieved_contexts": ["Context"],
-            "reference": "Answer",
-        }
-
-        # Mock httpx AsyncClient
-        with patch("run.httpx.AsyncClient") as mock_httpx:
-            mock_httpx_instance = AsyncMock()
-            mock_httpx_instance.__aenter__.return_value = mock_httpx_instance
-            mock_httpx_instance.__aexit__.return_value = None
-            mock_httpx.return_value = mock_httpx_instance
-
-            # Create an async function that mimics the experiment function
-            async def test_experiment_func(row, agent_url):
-                return await run_agent_experiment.func(row, agent_url=agent_url)
-
-            # Call the function
-            result = await test_experiment_func(test_row, agent_url="http://test-agent:8000")
-
-        # Verify error is captured in response
-        self.assertIn("response", result)
-        self.assertIn("ERROR", result["response"])
-        self.assertIn("Connection failed", result["response"])
+    # Verify result structure
+    assert "user_input" in result
+    assert "retrieved_contexts" in result
+    assert "reference" in result
+    assert "response" in result
+    assert result["user_input"] == "What is the weather?"
+    assert result["response"] == "Agent response text"
 
 
-class TestMain(unittest.TestCase):
-    """Test the main function"""
+@pytest.mark.asyncio
+async def test_run_agent_experiment_error(monkeypatch):
+    """Test agent query with error handling"""
 
-    def setUp(self):
-        """Set up temporary directory"""
-        self.temp_dir = tempfile.mkdtemp()
-        self.original_cwd = Path.cwd()
+    # Mock client that raises an error
+    async def mock_init_client(url):
+        raise Exception("Connection failed")
 
-    def tearDown(self):
-        """Clean up temporary directory"""
-        shutil.rmtree(self.temp_dir, ignore_errors=True)
+    # Mock httpx AsyncClient
+    class MockAsyncClient:
+        async def __aenter__(self):
+            return self
 
-    @patch("run.run_agent_experiment.arun")
-    @patch("run.Dataset.load")
-    async def test_main_execution(self, mock_dataset_load, mock_arun):
-        """Test main function execution flow"""
-        import os
+        async def __aexit__(self, exc_type, exc_val, exc_tb):
+            pass
 
-        os.chdir(self.temp_dir)
+    def mock_httpx_client():
+        return MockAsyncClient()
 
-        try:
-            # Create a mock dataset
-            mock_dataset = MagicMock()
-            mock_dataset.__len__ = MagicMock(return_value=2)
-            mock_dataset_load.return_value = mock_dataset
+    monkeypatch.setattr("run.initialize_client", mock_init_client)
+    monkeypatch.setattr("run.httpx.AsyncClient", mock_httpx_client)
 
-            # Mock experiment results
-            mock_experiment = MagicMock()
-            mock_arun.return_value = mock_experiment
+    # Create test row
+    test_row = {
+        "user_input": "What is the weather?",
+        "retrieved_contexts": ["Context"],
+        "reference": "Answer",
+    }
 
-            # Run main
-            await main("http://test-agent:8000")
+    # Call the function
+    result = await run_agent_experiment.func(test_row, agent_url="http://test-agent:8000")
 
-            # Verify Dataset.load was called
-            mock_dataset_load.assert_called_once()
-
-            # Verify experiment was run
-            mock_arun.assert_called_once()
-        finally:
-            os.chdir(self.original_cwd)
+    # Verify error is captured in response
+    assert "response" in result
+    assert "ERROR" in result["response"]
+    assert "Connection failed" in result["response"]
 
 
-if __name__ == "__main__":
-    unittest.main()
+# TestMain tests
+@pytest.mark.asyncio
+async def test_main_execution(temp_dir, monkeypatch):
+    """Test main function execution flow"""
+
+    tmp, original_cwd = temp_dir
+    os.chdir(tmp)
+
+    try:
+        # Create a mock dataset
+        class MockDataset:
+            def __len__(self):
+                return 2
+
+        mock_dataset = MockDataset()
+
+        def mock_dataset_load(path, backend):
+            return mock_dataset
+
+        # Mock experiment results
+        class MockExperiment:
+            pass
+
+        mock_experiment = MockExperiment()
+
+        async def mock_arun(*args, **kwargs):
+            return mock_experiment
+
+        calls_to_load = []
+        calls_to_arun = []
+
+        def mock_dataset_load_tracked(**kwargs):
+            calls_to_load.append(kwargs)
+            return mock_dataset
+
+        async def mock_arun_tracked(*args, **kwargs):
+            calls_to_arun.append({"args": args, "kwargs": kwargs})
+            return mock_experiment
+
+        monkeypatch.setattr("run.Dataset.load", mock_dataset_load_tracked)
+        monkeypatch.setattr("run.run_agent_experiment.arun", mock_arun_tracked)
+
+        # Run main
+        await main("http://test-agent:8000")
+
+        # Verify Dataset.load was called
+        assert len(calls_to_load) == 1
+
+        # Verify experiment was run
+        assert len(calls_to_arun) == 1
+    finally:
+        os.chdir(original_cwd)

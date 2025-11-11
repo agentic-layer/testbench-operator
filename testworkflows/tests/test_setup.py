@@ -4,205 +4,210 @@ Unit tests for setup.py
 Tests the dataset download, conversion, and Ragas dataset creation functionality.
 """
 
+import os
 import shutil
 import sys
 import tempfile
-import unittest
 from io import BytesIO
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pandas as pd
+import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 from setup import custom_convert_csv, dataframe_to_ragas_dataset, get_converter, main
 
 
-class TestCustomConvertCSV(unittest.TestCase):
-    """Test the custom_convert_csv function"""
+# Fixtures
+@pytest.fixture
+def temp_dir():
+    """Create a temporary directory for tests"""
+    tmp = tempfile.mkdtemp()
+    original_cwd = Path.cwd()
+    yield tmp, original_cwd
+    shutil.rmtree(tmp, ignore_errors=True)
 
-    def test_converts_string_to_list(self):
-        """Test that retrieved_contexts strings are converted to lists"""
+
+# TestCustomConvertCSV tests
+def test_converts_string_to_list():
+    """Test that retrieved_contexts strings are converted to lists"""
+    csv_content = b"user_input,retrieved_contexts,reference\n"
+    csv_content += b'"Question?","Context text","Answer"\n'
+
+    buffer = BytesIO(csv_content)
+    df = custom_convert_csv(buffer)
+
+    assert isinstance(df["retrieved_contexts"].iloc[0], list)
+    assert df["retrieved_contexts"].iloc[0] == ["Context text"]
+
+
+def test_handles_empty_retrieved_contexts():
+    """Test handling of empty retrieved_contexts"""
+    csv_content = b"user_input,retrieved_contexts,reference\n"
+    csv_content += b'"Question?","","Answer"\n'
+
+    buffer = BytesIO(csv_content)
+    df = custom_convert_csv(buffer)
+
+    # Empty string becomes [nan] in pandas, which then becomes []
+    # The function converts non-list values to lists
+    result = df["retrieved_contexts"].iloc[0]
+    # Check that it's a list and handle NaN case
+    assert isinstance(result, list)
+    # If it contains NaN, that's acceptable behavior for empty strings in CSV
+    if result and pd.isna(result[0]):
+        # This is expected - pandas converts empty string to NaN
+        pass
+    else:
+        # Or it should be an empty list
+        assert result == []
+
+
+def test_missing_retrieved_contexts_column():
+    """Test that CSV without retrieved_contexts column works"""
+    csv_content = b"user_input,reference\n"
+    csv_content += b'"Question?","Answer"\n'
+
+    buffer = BytesIO(csv_content)
+    df = custom_convert_csv(buffer)
+
+    assert "retrieved_contexts" not in df.columns
+
+
+# TestGetConverter tests
+def test_unsupported_format():
+    """Test that unsupported formats raise TypeError"""
+    with pytest.raises(TypeError) as exc_info:
+        get_converter("https://example.com/data.xlsx")
+
+    assert "Unsupported filetype" in str(exc_info.value)
+
+
+# TestDataframeToRagasDataset tests
+def test_creates_ragas_dataset_file(temp_dir):
+    """Test that ragas_dataset.jsonl is created"""
+
+    tmp, original_cwd = temp_dir
+    os.chdir(tmp)
+
+    try:
+        df = pd.DataFrame(
+            {
+                "user_input": ["Question 1"],
+                "retrieved_contexts": [["Context 1"]],
+                "reference": ["Answer 1"],
+            }
+        )
+
+        dataframe_to_ragas_dataset(df)
+
+        # Check for the file in the datasets subdirectory
+        dataset_file = Path(tmp) / "data" / "datasets" / "ragas_dataset.jsonl"
+        assert dataset_file.exists(), f"Dataset file not found at {dataset_file}"
+    finally:
+        os.chdir(original_cwd)
+
+
+# TestMain tests
+def test_main_with_csv(temp_dir, monkeypatch):
+    """Test main function with CSV file"""
+
+    tmp, original_cwd = temp_dir
+    os.chdir(tmp)
+
+    try:
+        # Mock the HTTP response
         csv_content = b"user_input,retrieved_contexts,reference\n"
         csv_content += b'"Question?","Context text","Answer"\n'
 
-        buffer = BytesIO(csv_content)
-        df = custom_convert_csv(buffer)
+        class MockResponse:
+            def __init__(self):
+                self.content = csv_content
 
-        self.assertIsInstance(df["retrieved_contexts"].iloc[0], list)
-        self.assertEqual(df["retrieved_contexts"].iloc[0], ["Context text"])
+            def raise_for_status(self):
+                pass
 
-    def test_handles_empty_retrieved_contexts(self):
-        """Test handling of empty retrieved_contexts"""
-        csv_content = b"user_input,retrieved_contexts,reference\n"
-        csv_content += b'"Question?","","Answer"\n'
+        calls = []
 
-        buffer = BytesIO(csv_content)
-        df = custom_convert_csv(buffer)
+        def mock_get(url, timeout=None):
+            calls.append({"url": url, "timeout": timeout})
+            return MockResponse()
 
-        # Empty string becomes [nan] in pandas, which then becomes []
-        # The function converts non-list values to lists
-        result = df["retrieved_contexts"].iloc[0]
-        # Check that it's a list and handle NaN case
-        self.assertIsInstance(result, list)
-        # If it contains NaN, that's acceptable behavior for empty strings in CSV
-        if result and pd.isna(result[0]):
-            # This is expected - pandas converts empty string to NaN
-            pass
-        else:
-            # Or it should be an empty list
-            self.assertEqual(result, [])
+        monkeypatch.setattr("setup.requests.get", mock_get)
 
-    def test_missing_retrieved_contexts_column(self):
-        """Test that CSV without retrieved_contexts column works"""
-        csv_content = b"user_input,reference\n"
-        csv_content += b'"Question?","Answer"\n'
+        # Run main
+        main("https://example.com/data.csv")
 
-        buffer = BytesIO(csv_content)
-        df = custom_convert_csv(buffer)
+        # Verify dataset was created in datasets subdirectory
+        dataset_file = Path(tmp) / "data" / "datasets" / "ragas_dataset.jsonl"
+        assert dataset_file.exists(), f"Dataset file not found at {dataset_file}"
 
-        self.assertNotIn("retrieved_contexts", df.columns)
+        # Verify requests.get was called correctly
+        assert len(calls) == 1
+        assert calls[0]["url"] == "https://example.com/data.csv"
+        assert calls[0]["timeout"] == 20
+    finally:
+        os.chdir(original_cwd)
 
 
-class TestGetConverter(unittest.TestCase):
-    """Test the get_converter function"""
+def test_main_with_json(temp_dir, monkeypatch):
+    """Test main function with JSON file"""
 
-    def test_unsupported_format(self):
-        """Test that unsupported formats raise TypeError"""
-        with self.assertRaises(TypeError) as context:
-            get_converter("https://example.com/data.xlsx")
+    tmp, original_cwd = temp_dir
+    os.chdir(tmp)
 
-        self.assertIn("Unsupported filetype", str(context.exception))
+    try:
+        # Mock the HTTP response
+        json_content = b"""[
+            {
+                "user_input": "Question?",
+                "retrieved_contexts": ["Context text"],
+                "reference": "Answer"
+            }
+        ]"""
 
+        class MockResponse:
+            def __init__(self):
+                self.content = json_content
 
-class TestDataframeToRagasDataset(unittest.TestCase):
-    """Test the dataframe_to_ragas_dataset function"""
+            def raise_for_status(self):
+                pass
 
-    def setUp(self):
-        """Set up temporary directory for test outputs"""
-        self.temp_dir = tempfile.mkdtemp()
-        self.original_cwd = Path.cwd()
+        def mock_get(url, timeout=None):
+            return MockResponse()
 
-    def tearDown(self):
-        """Clean up temporary directory"""
-        shutil.rmtree(self.temp_dir, ignore_errors=True)
+        monkeypatch.setattr("setup.requests.get", mock_get)
 
-    def test_creates_ragas_dataset_file(self):
-        """Test that ragas_dataset.jsonl is created"""
-        import os
+        # Run main
+        main("https://example.com/data.json")
 
-        os.chdir(self.temp_dir)
-
-        try:
-            df = pd.DataFrame(
-                {
-                    "user_input": ["Question 1"],
-                    "retrieved_contexts": [["Context 1"]],
-                    "reference": ["Answer 1"],
-                }
-            )
-
-            dataframe_to_ragas_dataset(df)
-
-            # Check for the file in the datasets subdirectory
-            dataset_file = Path(self.temp_dir) / "data" / "datasets" / "ragas_dataset.jsonl"
-            self.assertTrue(dataset_file.exists(), f"Dataset file not found at {dataset_file}")
-        finally:
-            os.chdir(self.original_cwd)
+        # Verify dataset was created in datasets subdirectory
+        dataset_file = Path(tmp) / "data" / "datasets" / "ragas_dataset.jsonl"
+        assert dataset_file.exists(), f"Dataset file not found at {dataset_file}"
+    finally:
+        os.chdir(original_cwd)
 
 
-class TestMain(unittest.TestCase):
-    """Test the main function with mocked HTTP requests"""
+def test_main_with_invalid_url(temp_dir, monkeypatch):
+    """Test main function with invalid URL (HTTP error)"""
 
-    def setUp(self):
-        """Set up temporary directory"""
-        self.temp_dir = tempfile.mkdtemp()
-        self.original_cwd = Path.cwd()
+    tmp, original_cwd = temp_dir
+    os.chdir(tmp)
 
-    def tearDown(self):
-        """Clean up temporary directory"""
-        shutil.rmtree(self.temp_dir, ignore_errors=True)
+    try:
+        # Mock HTTP error
+        class MockResponse:
+            def raise_for_status(self):
+                raise Exception("HTTP 404")
 
-    @patch("setup.requests.get")
-    def test_main_with_csv(self, mock_get):
-        """Test main function with CSV file"""
-        import os
+        def mock_get(url, timeout=None):
+            return MockResponse()
 
-        os.chdir(self.temp_dir)
+        monkeypatch.setattr("setup.requests.get", mock_get)
 
-        try:
-            # Mock the HTTP response
-            csv_content = b"user_input,retrieved_contexts,reference\n"
-            csv_content += b'"Question?","Context text","Answer"\n'
-
-            mock_response = MagicMock()
-            mock_response.content = csv_content
-            mock_response.raise_for_status = MagicMock()
-            mock_get.return_value = mock_response
-
-            # Run main
-            main("https://example.com/data.csv")
-
-            # Verify dataset was created in datasets subdirectory
-            dataset_file = Path(self.temp_dir) / "data" / "datasets" / "ragas_dataset.jsonl"
-            self.assertTrue(dataset_file.exists(), f"Dataset file not found at {dataset_file}")
-
-            # Verify requests.get was called
-            mock_get.assert_called_once_with("https://example.com/data.csv", timeout=20)
-        finally:
-            os.chdir(self.original_cwd)
-
-    @patch("setup.requests.get")
-    def test_main_with_json(self, mock_get):
-        """Test main function with JSON file"""
-        import os
-
-        os.chdir(self.temp_dir)
-
-        try:
-            # Mock the HTTP response
-            json_content = b"""[
-                {
-                    "user_input": "Question?",
-                    "retrieved_contexts": ["Context text"],
-                    "reference": "Answer"
-                }
-            ]"""
-
-            mock_response = MagicMock()
-            mock_response.content = json_content
-            mock_response.raise_for_status = MagicMock()
-            mock_get.return_value = mock_response
-
-            # Run main
-            main("https://example.com/data.json")
-
-            # Verify dataset was created in datasets subdirectory
-            dataset_file = Path(self.temp_dir) / "data" / "datasets" / "ragas_dataset.jsonl"
-            self.assertTrue(dataset_file.exists(), f"Dataset file not found at {dataset_file}")
-        finally:
-            os.chdir(self.original_cwd)
-
-    @patch("setup.requests.get")
-    def test_main_with_invalid_url(self, mock_get):
-        """Test main function with invalid URL (HTTP error)"""
-        import os
-
-        os.chdir(self.temp_dir)
-
-        try:
-            # Mock HTTP error
-            mock_response = MagicMock()
-            mock_response.raise_for_status.side_effect = Exception("HTTP 404")
-            mock_get.return_value = mock_response
-
-            # Verify that the error propagates
-            with self.assertRaises(Exception):
-                main("https://example.com/nonexistent.csv")
-        finally:
-            os.chdir(self.original_cwd)
-
-
-if __name__ == "__main__":
-    unittest.main()
+        # Verify that the error propagates
+        with pytest.raises(Exception, match="HTTP 404"):
+            main("https://example.com/nonexistent.csv")
+    finally:
+        os.chdir(original_cwd)
