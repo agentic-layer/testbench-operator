@@ -17,8 +17,8 @@ Usage:
     pytest tests/test_e2e.py
 """
 
-import os
 import logging
+import os
 import subprocess  # nosec
 from pathlib import Path
 from typing import List
