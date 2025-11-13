@@ -1,0 +1,44 @@
+#
+# GitHub Action: Check
+#
+# This workflow is triggered on pushes to main and renovate branches, as well as
+# pull requests. It runs backend checks to ensure code quality.
+#
+name: Check
+
+on:
+  push:
+    branches:
+      - main
+      - 'renovate/**'
+  pull_request:
+
+jobs:
+  test-testworkflows:
+    name: Runs on Ubuntu
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: testworkflows
+
+    steps:
+    - name: Clone the code
+      uses: 'actions/checkout@v5'
+
+    - name: Install uv
+      uses: 'astral-sh/setup-uv@v6'
+      with:
+        version: "0.8.17"
+        enable-cache: true
+
+    - name: Setup Python
+      uses: 'actions/setup-python@v6'
+      with:
+        python-version-file: "testworkflows/.python-version"
+
+    - name: Install Dependencies
+      run: uv sync
+
+    - name: Run Checks
+      run: uv run poe check
