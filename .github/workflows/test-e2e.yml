@@ -43,7 +43,7 @@ jobs:
           python-version-file: "testworkflows/.python-version"
 
       - name: Install Dependencies
-        run: uv sync --group dev --group prod
+        run: uv sync
 
       - name: Set up Kubernetes (kind)
         uses: 'helm/kind-action@v1'
