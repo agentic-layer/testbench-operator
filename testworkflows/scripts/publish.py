@@ -137,7 +137,7 @@ if __name__ == "__main__":
 
     # Call 'publish_metrics' with hardcoded input file and specified 'workflow_name' & 'otlp_endpoint'
     publish_metrics(
-        input_file="results/evaluation_scores.json",
+        input_file="data/results/evaluation_scores.json",
         workflow_name=args.workflow_name,
         otlp_endpoint=args.otlp_endpoint,
     )
