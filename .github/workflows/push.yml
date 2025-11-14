@@ -35,10 +35,6 @@ jobs:
         with:
           driver: docker-container
 
-      - name: 'Docker Build & Push'
-        run: |
-          make docker-buildx
-
       # Extract metadata (tags, labels) for Docker
       # https://github.com/docker/metadata-action
       - name: Extract Docker metadata
