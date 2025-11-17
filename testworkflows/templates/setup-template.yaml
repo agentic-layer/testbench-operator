@@ -1,0 +1,27 @@
+apiVersion: testworkflows.testkube.io/v1
+kind: TestWorkflowTemplate
+metadata:
+  name: ragas-setup-template
+  namespace: testkube
+  labels:
+    testkube.io/test-category: ragas-evaluation
+    app: testworkflows
+
+spec:
+  # Configuration parameters that can be overridden
+  config:
+    datasetUrl:
+      type: string
+      description: "URL to the dataset file (.csv, .json, or .parquet)"
+    image:
+      type: string
+      description: "Docker image to use for the setup step"
+      default: "ghcr.io/agentic-layer/testbench/testworkflows:latest"
+
+  # Steps to execute
+  steps:
+    - name: setup-dataset
+      run:
+        args:
+          - setup.py
+          - "{{ config.datasetUrl }}"

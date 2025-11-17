@@ -1,0 +1,39 @@
+apiVersion: testworkflows.testkube.io/v1
+kind: TestWorkflowTemplate
+metadata:
+  name: ragas-evaluate-template
+  namespace: testkube
+  labels:
+    testkube.io/test-category: ragas-evaluation
+    app: testworkflows
+spec:
+  # Configuration parameters that can be overridden
+  config:
+    model:
+      type: string
+      description: "Model name to use for evaluation (e.g., gemini-2.5-flash-lite)"
+    metrics:
+      type: string
+      description: "Space-separated list of metrics to evaluate (e.g., 'nv_accuracy context_precision')"
+    image:
+      type: string
+      description: "Docker image to use for the evaluate step"
+      default: "ghcr.io/agentic-layer/testbench/testworkflows:latest"
+
+  # Steps to execute
+  steps:
+    - name: evaluate-results
+      run:
+        command:
+          - sh
+          - -c
+        args:
+          - |
+            uv run python3 evaluate.py "{{ config.model }}" {{ config.metrics }} && \
+            if [ -f data/results/evaluation_scores.json ]; then
+              echo "✓ Evaluation completed"
+              cat data/results/evaluation_scores.json
+            else
+              echo "✗ Error: Results file not created"
+              exit 1
+            fi

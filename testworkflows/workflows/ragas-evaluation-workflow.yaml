@@ -1,0 +1,106 @@
+apiVersion: testworkflows.testkube.io/v1
+kind: TestWorkflow
+metadata:
+  name: ragas-evaluation-workflow
+  namespace: testkube
+  labels:
+    testkube.io/test-category: ragas-evaluation
+    app: testworkflows
+spec:
+  # Pod configuration with shared volume
+  pod:
+    volumes:
+      - name: shared-data
+        emptyDir: {}
+
+  # Container configuration shared across all template steps
+  container:
+    workingDir: /app
+    image: "{{ config.image }}"
+    imagePullPolicy: Never
+    env:
+      - name: OPENAI_API_KEY
+        value: "123"
+      - name: OPENAI_API_BASE
+        value: "http://172.18.0.1:11001"
+    volumeMounts:
+      - name: shared-data
+        mountPath: /app/data
+
+  # Global configuration that applies to all steps
+  config:
+    # Dataset configuration
+    datasetUrl:
+      type: string
+      description: "URL to the dataset file"
+      default: "http://172.18.0.1:8000/dataset.csv"
+
+    # Agent configuration
+    agentUrl:
+      type: string
+      description: "URL to the agent endpoint"
+      default: "http://172.18.0.1:8000"
+
+    # Evaluation configuration
+    model:
+      type: string
+      description: "Model for evaluation"
+      default: "gemini-2.5-flash-lite"
+
+    metrics:
+      type: string
+      description: "Metrics to evaluate (space-separated)"
+      default: "nv_accuracy context_recall"
+
+    # Publishing configuration
+    workflowName:
+      type: string
+      description: "Workflow name for metrics"
+      default: "ragas-test-workflow"
+
+    otlpEndpoint:
+      type: string
+      description: "OTLP endpoint URL"
+      default: "172.18.0.1:4318"
+
+    # Docker image
+    image:
+      type: string
+      description: "Docker image to use"
+      default: "ghcr.io/agentic-layer/testbench/testworkflows:latest"
+
+  # Steps using the templates
+  steps:
+    # Step 1: Setup - Download and convert dataset
+    - name: setup
+      template:
+        name: ragas-setup-template
+        config:
+          datasetUrl: "{{ config.datasetUrl }}"
+          image: "{{ config.image }}"
+
+    # Step 2: Run - Execute agent queries
+    - name: run
+      template:
+        name: ragas-run-template
+        config:
+          agentUrl: "{{ config.agentUrl }}"
+          image: "{{ config.image }}"
+
+    # Step 3: Evaluate - Run RAGAS evaluation
+    - name: evaluate
+      template:
+        name: ragas-evaluate-template
+        config:
+          model: "{{ config.model }}"
+          metrics: "{{ config.metrics }}"
+          image: "{{ config.image }}"
+
+    # Step 4: Publish - Push metrics to OTLP
+    - name: publish
+      template:
+        name: ragas-publish-template
+        config:
+          workflowName: "{{ config.workflowName }}"
+          otlpEndpoint: "{{ config.otlpEndpoint }}"
+          image: "{{ config.image }}"
