@@ -15,7 +15,7 @@ spec:
     otlpEndpoint:
       type: string
       description: "URL of the OTLP endpoint"
-      default: "localhost:4318"
+      default: "http://lgtm.monitoring:4318"
     image:
       type: string
       description: "Docker image to use for the publish step"
