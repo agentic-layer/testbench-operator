@@ -13,6 +13,7 @@ spec:
     datasetUrl:
       type: string
       description: "URL to the dataset file"
+      default: "https://raw.githubusercontent.com/explodinggradients/ragas/main/testset.csv"
 
     # Agent configuration
     agentUrl:
