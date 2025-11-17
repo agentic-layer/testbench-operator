@@ -3,3 +3,4 @@ kind: Kustomization
 resources:
   - weather-agent.yaml
   - lgtm.yaml
+  - templates/

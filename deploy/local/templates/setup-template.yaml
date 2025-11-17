@@ -22,6 +22,15 @@ spec:
   steps:
     - name: setup-dataset
       run:
+        command:
+          - sh
+          - -c
         args:
-          - setup.py
-          - "{{ config.datasetUrl }}"
+          - |
+            uv run python3 setup.py "{{ config.datasetUrl }}" && \
+            if [ -f data/datasets/ragas_dataset.jsonl ]; then
+              echo "✓ Dataset created: $(wc -l < data/datasets/ragas_dataset.jsonl) lines"
+            else
+              echo "✗ Error: Dataset file not created"
+              exit 1
+            fi

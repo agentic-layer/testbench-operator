@@ -17,12 +17,12 @@ spec:
   container:
     workingDir: /app
     image: "{{ config.image }}"
-    imagePullPolicy: Never
+    # imagePullPolicy: Never
     env:
       - name: OPENAI_API_KEY
         value: "123"
       - name: OPENAI_API_BASE
-        value: "http://172.18.0.1:11001"
+        value: "http://ai-gateway-litellm.ai-gateway:4000"
     volumeMounts:
       - name: shared-data
         mountPath: /app/data
