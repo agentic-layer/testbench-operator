@@ -21,15 +21,6 @@ v1alpha1.extension(name='ai-gateway-litellm', repo_name='agentic-layer', repo_pa
 load('ext://ai-gateway-litellm', 'ai_gateway_litellm_install')
 ai_gateway_litellm_install(version='0.2.0')
 
-# Webserver to serve test data (disabled in CI - manually started instead)
-if not os.getenv('CI'):
-    local_resource(
-        'test-data-server',
-        serve_cmd='python3 -m http.server 8000 --directory testworkflows/tests/test_data',
-        labels=['test-data'],
-        links=['http://localhost:8000/dataset.json']
-    )
-
 # Apply Kubernetes manifests
 k8s_yaml(kustomize('deploy/local'))
 

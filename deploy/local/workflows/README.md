@@ -2,7 +2,7 @@
 
 ## Prerequisites
 - Local Kubernetes (e.g. kind) cluster
-- Docker 
+- Docker
   - & an up-to-date Testbench docker container
 - Testkube CLI
 
@@ -26,9 +26,9 @@ kubectl apply -f deploy/local/workflows/ragas-evaluation-workflow.yaml
 With minimal setup:
 ```
 kubectl testkube run testworkflow ragas-evaluation-workflow \
-    --config datasetUrl="http://example.com/dataset.csv" \
+    --config datasetUrl="http://data-server:data-server:8000/dataset.csv" \
     --config agentUrl="http://ai-gateway-litellm:11010" \
-    --config metrics="nv_accuracy context_recall"
+    --config metrics="nv_accuracy context_recall" \
     --config workflowName="Testworkflow-Name" \
     -n testkube
 ```

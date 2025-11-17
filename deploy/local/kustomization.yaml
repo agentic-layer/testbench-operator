@@ -4,3 +4,4 @@ resources:
   - weather-agent.yaml
   - lgtm.yaml
   - templates/
+  - data-server/
