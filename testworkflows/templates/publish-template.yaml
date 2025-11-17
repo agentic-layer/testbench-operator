@@ -1,0 +1,37 @@
+apiVersion: testworkflows.testkube.io/v1
+kind: TestWorkflowTemplate
+metadata:
+  name: ragas-publish-template
+  namespace: testkube
+  labels:
+    testkube.io/test-category: ragas-evaluation
+    app: testworkflows
+spec:
+  # Configuration parameters for the Testworkflow-Label, OTLP-URL & the Docker Image
+  config:
+    workflowName:
+      type: string
+      description: "Name of the test workflow (used as label)"
+    otlpEndpoint:
+      type: string
+      description: "URL of the OTLP endpoint"
+      default: "localhost:4318"
+    image:
+      type: string
+      description: "Docker image to use for the publish step"
+      default: "ghcr.io/agentic-layer/testbench/testworkflows:latest"
+
+  # Working directory for the container
+  container:
+    workingDir: /app
+    image: "{{ config.image }}"
+    imagePullPolicy: Never
+
+  # Runs the publish script with the configured parameters
+  steps:
+    - name: publish-metrics
+      run:
+        args:
+          - publish.py
+          - "{{ config.workflowName }}"
+          - "{{ config.otlpEndpoint }}"

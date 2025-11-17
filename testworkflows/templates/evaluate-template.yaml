@@ -1,0 +1,37 @@
+apiVersion: testworkflows.testkube.io/v1
+kind: TestWorkflowTemplate
+metadata:
+  name: ragas-evaluate-template
+  namespace: testkube
+  labels:
+    testkube.io/test-category: ragas-evaluation
+    app: testworkflows
+spec:
+  # Configuration parameters for the LLM, the metrics & the Docker Image
+  config:
+    model:
+      type: string
+      description: "Model name to use for evaluation (e.g., gemini-2.5-flash-lite)"
+    metrics:
+      type: string
+      description: "Space-separated list of metrics to evaluate (e.g., 'faithfulness answer_relevancy')"
+    image:
+      type: string
+      description: "Docker image to use for the evaluate step"
+      default: "ghcr.io/agentic-layer/testbench/testworkflows:latest"
+
+  # Working directory for the container
+  container:
+    workingDir: /app
+    image: "{{ config.image }}"
+    imagePullPolicy: Never
+
+  # Runs the evaluate script with the configured parameters
+  steps:
+    - name: evaluate-results
+      run:
+        shell: |
+          evaluate.py {{ config.model }} {{ config.metrics }}
+      artifacts:
+        paths:
+          - results/evaluation_scores.json
