@@ -9,7 +9,7 @@
 
 ## Setup
 
-```
+```shell
 # Build the docker container from your local files
 docker build -t ghcr.io/agentic-layer/testbench/testworkflows:latest .
 
@@ -24,7 +24,8 @@ kubectl apply -f deploy/local/workflows/ragas-evaluation-workflow.yaml
 
 ## Usage
 With minimal setup:
-```
+
+```shell
 kubectl testkube run testworkflow ragas-evaluation-workflow \
     --config datasetUrl="http://data-server:data-server:8000/dataset.csv" \
     --config agentUrl="http://ai-gateway-litellm:11010" \
@@ -35,7 +36,8 @@ kubectl testkube run testworkflow ragas-evaluation-workflow \
 
 
 With all the optional parameters:
-```
+
+```shell
 kubectl testkube run testworkflow ragas-evaluation-workflow \
     --config datasetUrl="http://example.com/dataset.csv" \
     --config agentUrl="http://ai-gateway-litellm:11010" \

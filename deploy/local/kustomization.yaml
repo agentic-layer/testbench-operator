@@ -1,7 +1,8 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - weather-agent.yaml
   - lgtm.yaml
-  - templates/
+  - weather-agent.yaml
   - data-server/
+  - ../base
+  - ragas-evaluation-workflow.yaml

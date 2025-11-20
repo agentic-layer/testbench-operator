@@ -38,7 +38,7 @@ k8s_resource('lgtm', port_forwards=['11000:3000'])
 
 # Declare Testkube resources
 k8s_kind(
-    '^TestWorkflowTemplate$',
+    '^TestWorkflow.*$',
     pod_readiness='ignore',
 )
 
