@@ -27,10 +27,11 @@ With minimal setup:
 
 ```shell
 kubectl testkube run testworkflow ragas-evaluation-workflow \
-    --config datasetUrl="http://data-server:data-server:8000/dataset.csv" \
-    --config agentUrl="http://ai-gateway-litellm:11010" \
+    --config datasetUrl="http://data-server.data-server:8000/dataset.csv" \
+    --config agentUrl="http://agent-gateway-krakend.agent-gateway-krakend:10000/weather-agent" \
     --config metrics="nv_accuracy context_recall" \
     --config workflowName="Testworkflow-Name" \
+    --config image="ghcr.io/agentic-layer/testbench/testworkflows:pr-6" \
     -n testkube
 ```
 

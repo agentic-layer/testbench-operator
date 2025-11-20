@@ -16,16 +16,11 @@ on:
 env:
   # Required environment variables for the E2E test
   GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
-  OPENAI_API_KEY: PLACEHOLDER
 
 jobs:
   test:
-    name: Run on Ubuntu
     runs-on: ubuntu-latest
-
-    defaults:
-      run:
-        working-directory: testworkflows
+    timeout-minutes: 30
 
     steps:
       - name: Clone the code
@@ -47,33 +42,22 @@ jobs:
 
       - name: Set up Kubernetes (kind)
         uses: 'helm/kind-action@v1'
-        with:
-          cluster_name: testbench-cluster
 
       - name: Install Tilt
         run: |
           curl -fsSL https://raw.githubusercontent.com/tilt-dev/tilt/master/scripts/install.sh | bash
           tilt version
 
-      - name: Start test data server
-        run: uv run python -m http.server 8000 --directory tests/test_data &
-
-      - name: Start Tiltfile services
+      - name: Run Tilt CI
         run: tilt ci
-        working-directory: .
 
-      - name: Wait for services to be ready
+      - name: Run Test Workflow
         run: |
-          echo "Waiting for services to be ready..."
-          kubectl wait --for=condition=ready pod -l app=weather-agent --timeout=300s || true
-          kubectl wait --for=condition=ready pod -l app=ai-gateway-litellm --timeout=300s || true
-          kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=lgtm --timeout=300s || true
-          
-          echo "Checking service status..."
-          kubectl get pods -A
-          
-          echo "Waiting for test-data-server (HTTP server on port 8000)..."
-          curl --retry 30 --retry-delay 2 --retry-connrefused -f http://localhost:8000/dataset.json > /dev/null
-
-      - name: Running Test e2e
-        run: uv run poe test_e2e
+          kubectl testkube run testworkflow ragas-evaluation-workflow \
+              --config datasetUrl="http://data-server.data-server:8000/dataset.csv" \
+              --config agentUrl="http://agent-gateway-krakend.agent-gateway-krakend:10000/weather-agent" \
+              --config metrics="nv_accuracy context_recall" \
+              --config workflowName="Testworkflow-Name" \
+              --config image="ghcr.io/agentic-layer/testbench/testworkflows:pr-6" \
+              -n testkube \
+              --watch
