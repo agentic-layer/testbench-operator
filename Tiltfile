@@ -21,19 +21,12 @@ v1alpha1.extension(name='ai-gateway-litellm', repo_name='agentic-layer', repo_pa
 load('ext://ai-gateway-litellm', 'ai_gateway_litellm_install')
 ai_gateway_litellm_install(version='0.2.0')
 
-load('ext://helm_remote', 'helm_remote')
-helm_remote(
+load('ext://helm_resource', 'helm_resource')
+helm_resource(
     'testkube',
-    repo_url='oci://docker.io/kubeshop',
+    'oci://docker.io/kubeshop/testkube',
     namespace='testkube',
-    create_namespace=True,
-    version='2.4.2',
-    values=['./deploy/local/testkube/values.yaml'],
-)
-
-k8s_kind(
-    '^TestWorkflowTemplate$',
-    pod_readiness='ignore',
+    flags=['--version=2.4.2', '--create-namespace', '--values=deploy/local/testkube/values.yaml', '--wait', '--wait-for-jobs'],
 )
 
 # Apply Kubernetes manifests
@@ -44,11 +37,12 @@ k8s_resource('weather-agent', port_forwards='11010:8000', labels=['agents'], res
 k8s_resource('lgtm', port_forwards=['11000:3000'])
 
 # Declare Testkube resources
-k8s_resource('ragas-evaluate-template', resource_deps=['testkube-api-server'])
-k8s_resource('ragas-publish-template', resource_deps=['testkube-api-server'])
-k8s_resource('ragas-run-template', resource_deps=['testkube-api-server'])
-k8s_resource('ragas-setup-template', resource_deps=['testkube-api-server'])
+k8s_kind(
+    '^TestWorkflowTemplate$',
+    pod_readiness='ignore',
+)
 
-# Workaround: Declare dependency to ai-gateway operator, which ensures that cert-manager created secrets
-k8s_resource('webhook-cert-create', resource_deps=['cert-manager', 'ai-gateway-litellm-operator'])
-k8s_resource('webhook-cert-patch', resource_deps=['cert-manager', 'ai-gateway-litellm-operator'])
+k8s_resource('ragas-evaluate-template', resource_deps=['testkube'])
+k8s_resource('ragas-publish-template', resource_deps=['testkube'])
+k8s_resource('ragas-run-template', resource_deps=['testkube'])
+k8s_resource('ragas-setup-template', resource_deps=['testkube'])
