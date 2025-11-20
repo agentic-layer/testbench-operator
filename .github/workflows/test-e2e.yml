@@ -26,20 +26,6 @@ jobs:
       - name: Clone the code
         uses: 'actions/checkout@v5'
 
-      - name: Install uv
-        uses: 'astral-sh/setup-uv@v6'
-        with:
-          version: "0.8.17"
-          enable-cache: true
-
-      - name: Setup Python
-        uses: 'actions/setup-python@v6'
-        with:
-          python-version-file: "testworkflows/.python-version"
-
-      - name: Install Dependencies
-        run: uv sync
-
       - name: Set up Kubernetes (kind)
         uses: 'helm/kind-action@v1'
 
