@@ -7,7 +7,7 @@ update_settings(max_parallel_updates=10)
 load('ext://dotenv', 'dotenv')
 dotenv()
 
-v1alpha1.extension_repo(name='agentic-layer', url='https://github.com/agentic-layer/tilt-extensions', ref='v0.3.1')
+v1alpha1.extension_repo(name='agentic-layer', url='https://github.com/agentic-layer/tilt-extensions', ref='v0.4.0')
 
 v1alpha1.extension(name='cert-manager', repo_name='agentic-layer', repo_path='cert-manager')
 load('ext://cert-manager', 'cert_manager_install')
@@ -15,7 +15,7 @@ cert_manager_install()
 
 v1alpha1.extension(name='agent-runtime', repo_name='agentic-layer', repo_path='agent-runtime')
 load('ext://agent-runtime', 'agent_runtime_install')
-agent_runtime_install(version='0.9.0')
+agent_runtime_install(version='0.10.0')
 
 v1alpha1.extension(name='ai-gateway-litellm', repo_name='agentic-layer', repo_path='ai-gateway-litellm')
 load('ext://ai-gateway-litellm', 'ai_gateway_litellm_install')
