@@ -45,6 +45,7 @@ k8s_resource('lgtm', port_forwards=['11000:3000'])
 
 # Declare Testkube resources
 k8s_resource('webhook-cert-create', resource_deps=['cert-manager'])
+k8s_resource('webhook-cert-patch', resource_deps=['cert-manager'])
 k8s_resource('ragas-evaluate-template', resource_deps=['testkube-api-server'])
 k8s_resource('ragas-publish-template', resource_deps=['testkube-api-server'])
 k8s_resource('ragas-run-template', resource_deps=['testkube-api-server'])
