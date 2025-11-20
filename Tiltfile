@@ -44,9 +44,11 @@ k8s_resource('weather-agent', port_forwards='11010:8000', labels=['agents'], res
 k8s_resource('lgtm', port_forwards=['11000:3000'])
 
 # Declare Testkube resources
-k8s_resource('webhook-cert-create', resource_deps=['cert-manager'])
-k8s_resource('webhook-cert-patch', resource_deps=['cert-manager'])
 k8s_resource('ragas-evaluate-template', resource_deps=['testkube-api-server'])
 k8s_resource('ragas-publish-template', resource_deps=['testkube-api-server'])
 k8s_resource('ragas-run-template', resource_deps=['testkube-api-server'])
 k8s_resource('ragas-setup-template', resource_deps=['testkube-api-server'])
+
+# Workaround: Declare dependency to ai-gateway operator, which ensures that cert-manager created secrets
+k8s_resource('webhook-cert-create', resource_deps=['cert-manager', 'ai-gateway-litellm-operator'])
+k8s_resource('webhook-cert-patch', resource_deps=['cert-manager', 'ai-gateway-litellm-operator'])
