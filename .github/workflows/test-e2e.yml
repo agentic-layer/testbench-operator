@@ -39,6 +39,11 @@ jobs:
 
       - uses: kubeshop/setup-testkube@v1
 
+      - name: Build  TestWorkflow Docker Image
+        run: |
+          docker build -t testworkflows testworkflows/
+          kind load docker-image testworkflows
+
       - name: Run Test Workflow
         run: |
           testkube run testworkflow ragas-evaluation-workflow \
@@ -46,6 +51,6 @@ jobs:
               --config agentUrl="http://agent-gateway-krakend.agent-gateway-krakend:10000/weather-agent" \
               --config metrics="nv_accuracy context_recall" \
               --config workflowName="Testworkflow-Name" \
-              --config image="ghcr.io/agentic-layer/testbench/testworkflows:pr-6" \
+              --config image="testworkflows" \
               -n testkube \
               --watch
