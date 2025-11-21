@@ -1,0 +1,6 @@
+global:
+  testWorkflows:
+    createOfficialTemplates: false
+testkube-operator:
+  ## deploy Operator chart
+  enabled: enable

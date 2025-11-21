@@ -245,7 +245,7 @@ if __name__ == "__main__":
 
     # Run evaluation with the 'model' and 'metrics' provided as parameters, 'output_file' is hardcoded
     main(
-        output_file="results/evaluation_scores.json",
+        output_file="data/results/evaluation_scores.json",
         model=args.model,
         metrics=args.metrics,
         cost_per_input_token=args.cost_per_input,

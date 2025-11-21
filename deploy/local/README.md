@@ -1,0 +1,50 @@
+# Ragas Evaluation Workflow
+
+## Prerequisites
+- Local Kubernetes (e.g. kind) cluster
+- Docker
+  - & an up-to-date Testbench docker container
+- Testkube CLI
+
+
+## Setup
+
+```shell
+# Build the docker container from your local files
+docker build -t ghcr.io/agentic-layer/testbench/testworkflows:latest .
+
+# Load the docker container in your kind cluster
+kind load docker-image ghcr.io/agentic-layer/testbench/testworkflows:latest --name kind
+
+# Optional apply the Templates manually (should be automatically applied via Tilt)
+kubectl apply -f deploy/local/templates/
+kubectl apply -f deploy/local/workflows/ragas-evaluation-workflow.yaml
+
+```
+
+## Usage
+With minimal setup:
+
+```shell
+kubectl testkube run testworkflow ragas-evaluation-workflow \
+    --config datasetUrl="http://data-server.data-server:8000/dataset.csv" \
+    --config agentUrl="http://agent-gateway-krakend.agent-gateway-krakend:10000/weather-agent" \
+    --config metrics="nv_accuracy context_recall" \
+    --config workflowName="Testworkflow-Name" \
+    --config image="ghcr.io/agentic-layer/testbench/testworkflows:pr-6" \
+    -n testkube
+```
+
+
+With all the optional parameters:
+
+```shell
+kubectl testkube run testworkflow ragas-evaluation-workflow \
+    --config datasetUrl="http://example.com/dataset.csv" \
+    --config agentUrl="http://ai-gateway-litellm:11010" \
+    --config model="gemini-2.5-pro" \
+    --config metrics="nv_accuracy context_recall"
+    --config workflowName="Testworkflow-Name" \
+    --config otlpEndpoint="http://otlp-endpoint:4093"
+    -n testkube
+```

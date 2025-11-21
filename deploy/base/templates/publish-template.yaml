@@ -1,0 +1,31 @@
+apiVersion: testworkflows.testkube.io/v1
+kind: TestWorkflowTemplate
+metadata:
+  name: ragas-publish-template
+  namespace: testkube
+  labels:
+    testkube.io/test-category: ragas-evaluation
+    app: testworkflows
+spec:
+  # Configuration parameters that can be overridden
+  config:
+    workflowName:
+      type: string
+      description: "Name of the test workflow (used as label)"
+    otlpEndpoint:
+      type: string
+      description: "URL of the OTLP endpoint"
+      default: "http://lgtm.monitoring:4318"
+    image:
+      type: string
+      description: "Docker image to use for the publish step"
+      default: "ghcr.io/agentic-layer/testbench/testworkflows:latest"
+
+  # Steps to execute
+  steps:
+    - name: publish-metrics
+      run:
+        args:
+          - publish.py
+          - "{{ config.workflowName }}"
+          - "{{ config.otlpEndpoint }}"

@@ -1,0 +1,27 @@
+apiVersion: testworkflows.testkube.io/v1
+kind: TestWorkflowTemplate
+metadata:
+  name: ragas-run-template
+  namespace: testkube
+  labels:
+    testkube.io/test-category: ragas-evaluation
+    app: testworkflows
+
+spec:
+  # Configuration parameters that can be overridden
+  config:
+    agentUrl:
+      type: string
+      description: "URL to the agent endpoint (A2A protocol)"
+    image:
+      type: string
+      description: "Docker image to use for the run step"
+      default: "ghcr.io/agentic-layer/testbench/testworkflows:latest"
+
+  # Steps to execute
+  steps:
+    - name: run-agent-queries
+      run:
+        args:
+          - run.py
+          - "{{ config.agentUrl }}"
