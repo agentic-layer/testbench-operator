@@ -33,8 +33,8 @@ jobs:
 
       - name: Build TestWorkflow Docker Image
         run: |
-          docker build -t testworkflows testworkflows/
-          kind load docker-image testworkflows
+          docker build -t testworkflows:e2e-test testworkflows/
+          kind load docker-image testworkflows:e2e-test
 
       - name: Install Tilt
         run: |
@@ -54,6 +54,6 @@ jobs:
               --config agentUrl="http://agent-gateway-krakend.agent-gateway-krakend:10000/weather-agent" \
               --config metrics="nv_accuracy context_recall" \
               --config workflowName="Testworkflow-Name" \
-              --config image="testworkflows" \
+              --config image="testworkflows:e2e-test" \
               -n testkube \
               --watch
