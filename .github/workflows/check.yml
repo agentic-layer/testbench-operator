@@ -18,10 +18,6 @@ jobs:
     name: Runs on Ubuntu
     runs-on: ubuntu-latest
 
-    defaults:
-      run:
-        working-directory: testworkflows
-
     steps:
     - name: Clone the code
       uses: 'actions/checkout@v5'
@@ -35,7 +31,7 @@ jobs:
     - name: Setup Python
       uses: 'actions/setup-python@v6'
       with:
-        python-version-file: "testworkflows/.python-version"
+        python-version-file: ".python-version"
 
     - name: Install Dependencies
       run: uv sync

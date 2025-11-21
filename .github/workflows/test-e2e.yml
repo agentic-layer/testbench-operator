@@ -37,7 +37,7 @@ jobs:
 
       - name: Build TestWorkflow Docker Image
         run: |
-          docker build -t local-registry:5000/testworkflows:e2e-test testworkflows/
+          docker build -t local-registry:5000/testworkflows:e2e-test .
           docker push local-registry:5000/testworkflows:e2e-test
 
       - name: Install Tilt
