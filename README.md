@@ -1,6 +1,8 @@
-# Test Workflows - Automated Agent Evaluation System
+# Agentic Layer Test Bench - Automated Agent Evaluation System
 
-An automated evaluation and testing system for AI agents using the **RAGAS** (Retrieval Augmented Generation Assessment) framework. This system downloads test datasets, executes queries through agents via the **A2A** protocol, evaluates responses using configurable metrics, and publishes results to **OpenTelemetry** for monitoring.
+An automated evaluation and testing system for AI agents using the **RAGAS** (Retrieval Augmented Generation Assessment)
+framework. This system downloads test datasets, executes queries through agents via the **A2A** protocol, evaluates
+responses using configurable metrics, and publishes results to **OpenTelemetry** for monitoring.
 
 ----
 
@@ -66,9 +68,11 @@ results/evaluation_scores.json
         v
 OpenTelemetry Collector
 ```
+
 ### Key Design Principles
 
-- **RAGAS-Native Format**: Uses RAGAS column names (`user_input`, `response`, `retrieved_contexts`, `reference`) throughout
+- **RAGAS-Native Format**: Uses RAGAS column names (`user_input`, `response`, `retrieved_contexts`, `reference`)
+  throughout
 - **JSONL Backend**: Internal storage uses JSONL for native list support
 - **Format-Aware Input**: Intelligent handling of CSV (list conversion), JSON, and Parquet formats
 
@@ -84,19 +88,49 @@ OpenTelemetry Collector
 
 ## Getting Started
 
+### With Tilt and Local Kubernetes
+
+```shell
+Start Tilt in the project root to set up the local Kubernetes environment:
+tilt up
+```
+
+Run the RAGAS evaluation workflow with minimal setup:
+
+```shell
+kubectl testkube run testworkflow ragas-evaluation-workflow \
+    --config datasetUrl="http://data-server.data-server:8000/dataset.csv" \
+    --config agentUrl="http://agent-gateway-krakend.agent-gateway-krakend:10000/weather-agent" \
+    --config metrics="nv_accuracy context_recall" \
+    --config workflowName="Testworkflow-Name" \
+    --config image="ghcr.io/agentic-layer/testbench/testworkflows:latest" \
+    -n testkube
+```
+
+Run the RAGAS evaluation workflow with all optional parameters:
+
+```shell
+kubectl testkube run testworkflow ragas-evaluation-workflow \
+    --config datasetUrl="http://data-server.data-server:8000/dataset.csv" \
+    --config agentUrl="http://agent-gateway-krakend.agent-gateway-krakend:10000/weather-agent" \
+    --config metrics="nv_accuracy context_recall"
+    --config workflowName="Testworkflow-Name" \
+    --config image="ghcr.io/agentic-layer/testbench/testworkflows:latest" \
+    --config model="gemini/gemini-2.5-flash" \
+    --config otlpEndpoint="http://otlp-endpoint:4093" \
+    -n testkube
+```
+
 ### Install dependencies using UV
 
-```bash
-# Clone the repository
-git clone git@github.com:agentic-layer/testbench.git
-
+```shell
 # Install (dev & prod) dependencies with uv
-uv sync --group dev --group prod
+uv sync
 ```
 
 ### Environment Setup
 
-```bash
+```shell
 # Required for evaluation
 export OPENAI_API_KEY="your-api-key-here"
 
@@ -112,7 +146,7 @@ The system automatically creates the required directories (`data/`, `results/`) 
 
 Run the complete evaluation pipeline in 4 steps:
 
-```bash
+```shell
 # 1. Download and prepare dataset
 python3 scripts/setup.py "https://example.com/dataset.csv"
 
@@ -135,17 +169,21 @@ python3 scripts/publish.py "my-agent-evaluation"
 Downloads and converts test datasets to RAGAS-native JSONL format.
 
 **Syntax:**
-```bash
+
+```shell
 python3 scripts/setup.py <dataset_url>
 ```
 
 **Arguments:**
+
 - `dataset_url` (required): URL to dataset file (`.csv`, `.json`, or `.parquet`)
 
 **Required Dataset Schema:**
+
 - See [Dataset Requirements](#dataset-requirements)
 
 **Output:**
+
 - `data/datasets/ragas_dataset.jsonl` - RAGAS Dataset in JSONL format
 
 ---
@@ -155,25 +193,31 @@ python3 scripts/setup.py <dataset_url>
 Executes test queries through an agent using the A2A protocol and collects responses.
 
 **Syntax:**
-```bash
+
+```shell
 python3 scripts/run.py <agent_url>
 ```
 
 **Arguments:**
+
 - `agent_url` (required): URL to the agent's A2A endpoint
 
 **Input:**
+
 - `data/datasets/ragas_dataset.jsonl` (loaded automatically)
 
 **Output:**
+
 - `data/experiments/ragas_experiment.jsonl` - Agent responses with preserved context
 
 **Output Schema:**
+
 ```jsonl
 {"user_input": "What is X?", "retrieved_contexts": ["Context about X"], "reference": "X is...", "response": "Agent's answer"}
 ```
 
 **Notes:**
+
 - Uses asynchronous A2A client for efficient communication
 - Preserves all original dataset fields
 - Automatically handles response streaming
@@ -185,11 +229,13 @@ python3 scripts/run.py <agent_url>
 Evaluates agent responses using configurable RAGAS metrics and calculates costs.
 
 **Syntax:**
-```bash
+
+```shell
 python3 scripts/evaluate.py <model> <metric1> [metric2 ...] [--cost-per-input COST] [--cost-per-output COST]
 ```
 
 **Arguments:**
+
 - `model` (required): Model name for evaluation (e.g., `gemini-2.5-flash-lite`, `gpt-4`)
 - `metrics` (required): One or more RAGAS metric names
 - `--cost-per-input` (optional): Cost per input token (default: 0.000005, i.e., $5 per 1M tokens)
@@ -197,35 +243,35 @@ python3 scripts/evaluate.py <model> <metric1> [metric2 ...] [--cost-per-input CO
 
 ### **Available Metrics:**
 
-| Metric | Special required columns    |
-|--------|-------------------------|
-| `faithfulness` | retrieved_contexts |
-| `context_precision` | retrieved_contexts |
-| `context_recall` | retrieved_contexts |
-| `context_entity_recall` | retrieved_contexts|
-| `context_utilization` | retrieved_contexts|
-| `llm_context_precision_with_reference` | retrieved_contexts|
-|`llm_context_precision_without_reference`| retrieved_contexts|
-|`faithful_rate`| retrieved_contexts|
-|`relevance_rate`| retrieved_contexts|
-|`noise_sensitivity`| retrieved_contexts|
-|`factual_correctness`|                         |
-|`domain_specific_rubrics`|                         |
-|`nv_accuracy`|                         |
-|`nv_context_relevance`| retrieved_contexts|
-|`nv_response_groundedness`| retrieved_contexts|
-|`string_present`|                         |
-|`exact_match`|                         |
-|`summary_score`| reference_contexts |
-|`llm_sql_equivalence_with_reference`| reference_contexts |
-
-
+| Metric                                    | Special required columns |
+|-------------------------------------------|--------------------------|
+| `faithfulness`                            | retrieved_contexts       |
+| `context_precision`                       | retrieved_contexts       |
+| `context_recall`                          | retrieved_contexts       |
+| `context_entity_recall`                   | retrieved_contexts       |
+| `context_utilization`                     | retrieved_contexts       |
+| `llm_context_precision_with_reference`    | retrieved_contexts       |
+| `llm_context_precision_without_reference` | retrieved_contexts       |
+| `faithful_rate`                           | retrieved_contexts       |
+| `relevance_rate`                          | retrieved_contexts       |
+| `noise_sensitivity`                       | retrieved_contexts       |
+| `factual_correctness`                     |                          |
+| `domain_specific_rubrics`                 |                          |
+| `nv_accuracy`                             |                          |
+| `nv_context_relevance`                    | retrieved_contexts       |
+| `nv_response_groundedness`                | retrieved_contexts       |
+| `string_present`                          |                          |
+| `exact_match`                             |                          |
+| `summary_score`                           | reference_contexts       |
+| `llm_sql_equivalence_with_reference`      | reference_contexts       |
 
 **Input:**
+
 - `data/experiments/ragas_experiment.jsonl` (loaded automatically)
 
 **Examples:**
-```bash
+
+```shell
 # Single metric
 python3 scripts/evaluate.py gemini-2.5-flash-lite faithfulness
 
@@ -239,9 +285,11 @@ python3 scripts/evaluate.py gpt-4 faithfulness answer_correctness \
 ```
 
 **Output:**
+
 - `results/evaluation_scores.json` - Evaluation results with metrics, token usage, and costs
 
 **Output Format:**
+
 ```json
 {
   "overall_scores": {
@@ -265,6 +313,7 @@ python3 scripts/evaluate.py gpt-4 faithfulness answer_correctness \
 ```
 
 **Notes:**
+
 - Currently only support **SingleTurnSample** Metrics (see [Available Metrics](#available-metrics))
 - Dynamically discovers available metrics from `ragas.metrics` module
 - Invalid metric names will show available options
@@ -277,15 +326,18 @@ python3 scripts/evaluate.py gpt-4 faithfulness answer_correctness \
 Publishes evaluation metrics to an OpenTelemetry OTLP endpoint for monitoring.
 
 **Syntax:**
-```bash
+
+```shell
 python3 scripts/publish.py <workflow_name> [otlp_endpoint]
 ```
 
 **Arguments:**
+
 - `workflow_name` (required): Name of the test workflow (used as metric label)
 - `otlp_endpoint` (optional): OTLP HTTP endpoint URL (default: `localhost:4318`)
 
 **Input:**
+
 - `results/evaluation_scores.json` (loaded automatically)
 
 **Published Metrics:**
@@ -298,6 +350,7 @@ ragas_evaluation_answer_relevancy{workflow_name="weather-assistant-eval"} = 0.92
 ```
 
 **Notes:**
+
 - Sends metrics to `/v1/metrics` endpoint
 - Uses resource with `service.name="ragas-evaluation"`
 - Forces flush to ensure delivery before exit
@@ -310,33 +363,39 @@ ragas_evaluation_answer_relevancy{workflow_name="weather-assistant-eval"} = 0.92
 
 Your input dataset must contain these columns:
 
-```python
+```
 {
-    "user_input": str,           # Test question/prompt
-    "retrieved_contexts": [str], # List of context strings (must be array type) (Optional but required by many metrics)
-    "reference": str             # Ground truth answer
+    "user_input": str,  # Test question/prompt
+    "retrieved_contexts": [str],  # List of context strings (must be array type) (Optional but required by many metrics)
+    "reference": str  # Ground truth answer
 }
 ```
 
 ### Format-Specific Notes
 
 **CSV Files:**
+
 - `retrieved_contexts` must be formatted as quoted array strings
 - Example: `"['Context 1', 'Context 2', 'Context 3']"`
 - The system automatically parses these strings into Python lists
 
 **JSON Files:**
+
 ```json
 [
   {
     "user_input": "What is the capital of France?",
-    "retrieved_contexts": ["Paris is a city in France.", "France is in Europe."],
+    "retrieved_contexts": [
+      "Paris is a city in France.",
+      "France is in Europe."
+    ],
     "reference": "Paris"
   }
 ]
 ```
 
 **Parquet Files:**
+
 - Use native list/array columns for `retrieved_contexts`
 
 ### Example Dataset
@@ -354,12 +413,8 @@ user_input,retrieved_contexts,reference
 ### Unit Tests
 
 Run all unit tests:
-```bash
-uv run pytest tests/ -v
-```
 
-Or using the task runner:
-```bash
+```shell
 uv run poe test
 ```
 
@@ -367,18 +422,19 @@ uv run poe test
 
 Run the complete pipeline integration test:
 
-```bash
+```shell
 uv run pytest tests_e2e/test_e2e.py -v
 ```
 
 Or using the task runner:
-```bash
+
+```shell
 uv run poe test_e2e
 ```
 
 **Configuration via Environment Variables:**
 
-```bash
+```shell
 export E2E_DATASET_URL="http://localhost:8000/dataset.json"
 export E2E_AGENT_URL="http://localhost:11010"
 export E2E_MODEL="gemini-2.5-flash-lite"
@@ -389,19 +445,14 @@ export E2E_OTLP_ENDPOINT="localhost:4318"
 pytest tests_e2e/test_e2e.py -v
 ```
 
-**Test Coverage:**
-1. Scripts exist and are executable
-2. `setup.py` creates `data/datasets/ragas_dataset.jsonl`
-3. `run.py` creates `data/experiments/ragas_experiment.jsonl`
-4. `evaluate.py` creates `results/evaluation_scores.json`
-5. `publish.py` successfully pushes metrics to OTLP
-
 ----
 
 ## Development
 
 ## Code Quality Standards
+
 ### Code Style:
+
 - **Linting**: Ruff with 120 character line limit
 - **Type Checking**: mypy for static type analysis
 - **Security**: Bandit for security vulnerability detection
@@ -411,7 +462,7 @@ pytest tests_e2e/test_e2e.py -v
 
 This project uses `poethepoet` for task automation:
 
-```bash
+```shell
 # Run all quality checks
 uv run poe check
 
@@ -437,11 +488,13 @@ uv run poe lint          # Auto-fix linting issues
 **Problem**: Dataset doesn't have the required schema.
 
 **Solution**:
+
 - Verify your dataset has columns: `user_input`, `retrieved_contexts`, and `reference`
 - Check that column names match exactly (case-sensitive)
 - Ensure `retrieved_contexts` is formatted as a list (see Dataset Requirements)
 
 Example fix for CSV:
+
 ```csv
 # Wrong (missing columns)
 question,context,answer
@@ -455,6 +508,7 @@ user_input,retrieved_contexts,reference
 **Problem**: `evaluate.py` can't find experiment results.
 
 **Solution**:
+
 - Check if `data/experiments/ragas_experiment.jsonl` exists
 - Verify `run.py` completed successfully without errors
 - Ensure the agent URL was accessible during execution
@@ -465,11 +519,13 @@ user_input,retrieved_contexts,reference
 **Problem**: `retrieved_contexts` not parsing correctly from CSV.
 
 **Solution**:
+
 - Ensure lists are formatted as Python array strings: `"['item1', 'item2']"`
 - Use proper quoting in CSV: wrap the entire array string in double quotes
 - Consider using JSON or Parquet format for complex data types
 
 Example:
+
 ```csv
 user_input,retrieved_contexts,reference
 "What is X?","['Context about X', 'More context']","X is..."
@@ -480,44 +536,14 @@ user_input,retrieved_contexts,reference
 **Problem**: Certain metrics fail during evaluation.
 
 **Solution**:
+
 - Some metrics require the `reference` field (e.g., `context_precision`, `context_recall`)
 - Verify your dataset includes all required fields for the metrics you're using
 - Check the RAGAS documentation for metric-specific requirements
 
 ----
 
-## Project Structure
-
-```
-├── scripts/                   # Main pipeline scripts
-│   ├── setup.py               # Dataset download & conversion
-│   ├── run.py                 # Agent query execution
-│   ├── evaluate.py            # RAGAS metric evaluation
-│   └── publish.py             # Metrics publishing to OTLP
-├── tests/                     # Unit tests
-│   ├── test_setup.py
-│   ├── test_run.py
-│   ├── test_evaluate.py
-│   ├── test_publish.py
-│   └── test_data/            # Sample test datasets
-│       ├── dataset.csv
-│       └── dataset.json
-├── tests_e2e/                # End-to-end integration tests
-│   └── test_e2e.py
-├── data/                     # Runtime data (gitignored)
-│   ├── datasets/             # Input datasets (RAGAS format)
-│   │   └── ragas_dataset.jsonl
-│   └── experiments/          # Agent responses with context
-│       └── ragas_experiment.jsonl
-├── results/                  # Evaluation outputs (gitignored)
-│   └── evaluation_scores.json
-├── pyproject.toml           # Dependencies & project config
-├── uv.lock                  # Lock file for uv package manager
-├── .python-version          # Python Version file
-```
-
-----
-
 ## Contributing
 
-See [Contribution Guide](https://github.com/agentic-layer/testbench?tab=contributing-ov-file) for details on contribution, and the process for submitting pull requests.
+See [Contribution Guide](https://github.com/agentic-layer/testbench?tab=contributing-ov-file) for details on
+contribution, and the process for submitting pull requests.
