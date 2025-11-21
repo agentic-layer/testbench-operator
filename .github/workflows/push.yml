@@ -63,7 +63,6 @@ jobs:
         id: build-and-push
         uses: docker/build-push-action@v6
         with:
-          context: ./testworkflows
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}

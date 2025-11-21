@@ -1,33 +1,33 @@
-# Build the manager binary
-FROM golang:1.24 AS builder
-ARG TARGETOS
-ARG TARGETARCH
+FROM python:3.13-slim
 
-WORKDIR /workspace
-# Copy the Go Modules manifests
-COPY go.mod go.mod
-COPY go.sum go.sum
-# cache deps before building and copying source so that we don't need to re-download as much
-# and so that source changes don't invalidate our downloaded layer
-RUN go mod download
+WORKDIR /app
 
-# Copy the go source
-COPY cmd/main.go cmd/main.go
-COPY api/ api/
-COPY internal/ internal/
+# Install runtime and build dependencies (git is needed for Gitpython, which is a dependency of Ragas)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    && rm -rf /var/lib/apt/lists/*
 
-# Build
-# the GOARCH has not a default value to allow the binary be built according to the host where the command
-# was called. For example, if we call make docker-build in a local env which has the Apple Silicon M1 SO
-# the docker BUILDPLATFORM arg will be linux/arm64 when for Apple x86 it will be linux/amd64. Therefore,
-# by leaving it empty we can ensure that the container and binary shipped on it will have the same platform.
-RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o manager cmd/main.go
+# Install UV package manager
+COPY --from=ghcr.io/astral-sh/uv:0.9 /uv /bin/uv
 
-# Use distroless as minimal base image to package the manager binary
-# Refer to https://github.com/GoogleContainerTools/distroless for more details
-FROM gcr.io/distroless/static:nonroot
-WORKDIR /
-COPY --from=builder /workspace/manager .
-USER 65532:65532
+# Copy dependency files
+COPY pyproject.toml uv.lock ./
 
-ENTRYPOINT ["/manager"]
+# Install dependencies using UV
+RUN uv sync
+
+# Copy scripts to root dir
+COPY scripts/* ./
+
+# Create directories for data and results
+RUN mkdir -p data/datasets data/experiments results
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+# Make scripts executable
+RUN chmod +x *.py
+
+# Set 'uv run python3' entrypoint so we can run scripts directly
+ENTRYPOINT ["uv", "run", "python3"]

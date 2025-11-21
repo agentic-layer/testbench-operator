@@ -17,10 +17,24 @@ repos:
       - id: requirements-txt-fixer
       - id: mixed-line-ending
 
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    # uv version.
+    rev: 0.8.4
+    hooks:
+      # Update the uv lockfile
+      - id: uv-lock
+
   - repo: local
     hooks:
-      - id: make-fmt
-        name: Run make fmt
+      - id: python-lint
+        name: python-lint
         language: system
-        entry: "make fmt"
+        entry: "uv run poe lint"
+        types_or: [ python ]
+        pass_filenames: false
+      - id: python-ruff
+        name: python-ruff
+        language: system
+        entry: "uv run poe ruff"
+        types_or: [ python ]
         pass_filenames: false
