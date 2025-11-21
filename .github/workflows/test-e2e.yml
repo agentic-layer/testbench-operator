@@ -51,6 +51,7 @@ jobs:
       - name: Setup Testkube CLI
         uses: kubeshop/setup-testkube@v1
 
+      # TODO: Use the built docker image above instead of the ghcr.io one
       - name: Run Test Workflow
         run: |
           testkube run testworkflow ragas-evaluation-workflow \
@@ -58,6 +59,6 @@ jobs:
               --config agentUrl="http://agent-gateway-krakend.agent-gateway-krakend:10000/weather-agent" \
               --config metrics="nv_accuracy context_recall" \
               --config workflowName="Testworkflow-Name" \
-              --config image="local-registry:5000/testworkflows:e2e-test" \
+              --config image="ghcr.io/agentic-layer/testbench/testworkflows:latest" \
               -n testkube \
               --watch
