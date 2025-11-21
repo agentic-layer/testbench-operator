@@ -17,6 +17,7 @@ spec:
   container:
     workingDir: /app
     image: "{{ config.image }}"
+    ImagePullPolicy: IfNotPresent
     env:
       - name: OPENAI_API_KEY
         value: "123"
