@@ -28,6 +28,13 @@ jobs:
 
       - name: Set up Kubernetes (kind)
         uses: 'helm/kind-action@v1'
+        with:
+          cluster_name: 'kind'
+
+      - name: Build TestWorkflow Docker Image
+        run: |
+          docker build -t testworkflows testworkflows/
+          kind load docker-image testworkflows
 
       - name: Install Tilt
         run: |
@@ -37,12 +44,8 @@ jobs:
       - name: Run Tilt CI
         run: tilt ci
 
-      - uses: kubeshop/setup-testkube@v1
-
-      - name: Build  TestWorkflow Docker Image
-        run: |
-          docker build -t testworkflows testworkflows/
-          kind load docker-image testworkflows
+      - name: Setup Testkube CLI
+        uses: kubeshop/setup-testkube@v1
 
       - name: Run Test Workflow
         run: |
