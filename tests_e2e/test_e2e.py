@@ -2,7 +2,7 @@
 End-to-end test that runs all scripts in the correct order:
 1. setup.py - Downloads, converts and saves Ragas Dataset to data/datasets/ragas_dataset.jsonl
 2. run.py - Runs agent queries on the dataset and saves Ragas Experiment to data/experiments/ragas_experiment.jsonl
-3. evaluate.py - Evaluates results using RAGAS metrics and saves result to results/evaluation_scores.json
+3. evaluate.py - Evaluates results using RAGAS metrics and saves result to data/results/evaluation_scores.json
 4. publish.py - Publishes metrics via OpenTelemetry OTLP
 
 Usage:
@@ -57,7 +57,7 @@ class E2ETestRunner:
         # Define expected output files
         self.dataset_file = Path("./data/datasets/ragas_dataset.jsonl")
         self.results_file = Path("./data/experiments/ragas_experiment.jsonl")
-        self.evaluation_file = Path("./results/evaluation_scores.json")
+        self.evaluation_file = Path("./data/results/evaluation_scores.json")
 
     def verify_scripts_exist(self) -> bool:
         """Verify that all required scripts exist."""
@@ -231,7 +231,7 @@ def test_e2e_pipeline():
     """
 
     # Get configuration from environment variables with sensible defaults
-    dataset_url = os.getenv("E2E_DATASET_URL", "http://localhost:8000/dataset.json")
+    dataset_url = os.getenv("E2E_DATASET_URL", "http://data-server.data-server:8000/dataset.csv")
     agent_url = os.getenv("E2E_AGENT_URL", "http://localhost:11010")
     model = os.getenv("E2E_MODEL", "gemini-2.5-flash-lite")
     metrics_str = os.getenv("E2E_METRICS", "faithfulness")

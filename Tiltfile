@@ -39,6 +39,7 @@ k8s_yaml(kustomize('deploy/local'))
 k8s_resource('ai-gateway-litellm', port_forwards=['11001:4000'])
 k8s_resource('weather-agent', port_forwards='11010:8000', labels=['agents'], resource_deps=['agent-runtime'])
 k8s_resource('lgtm', port_forwards=['11000:3000'])
+k8s_resource('data-server', port_forwards='11020:8000')
 
 # Declare Testkube resources
 k8s_kind(
