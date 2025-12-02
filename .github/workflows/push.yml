@@ -20,6 +20,8 @@ jobs:
       contents: read
       packages: write
       id-token: write
+    outputs:
+      image-tags: ${{ steps.meta.outputs.tags }}
 
     steps:
       - name: 'Checkout'
