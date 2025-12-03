@@ -114,7 +114,12 @@ jobs:
           tilt version
 
       - name: Run Tilt CI
-        run: tilt ci
+        run: |
+          # The tilt setup is a bit flaky on a fresh startup, so we retry a few times
+          for i in {1..3}; do
+            tilt ci && break
+            echo "Tilt CI failed, retrying... ($i/3)"
+          done
 
       - name: Setup Testkube CLI
         uses: kubeshop/setup-testkube@v1
