@@ -1,0 +1,131 @@
+name: CI
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - main
+      - 'renovate/**'
+
+jobs:
+  check:
+    name: Code Quality Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Clone the code
+        uses: 'actions/checkout@v5'
+
+      - name: Install uv
+        uses: 'astral-sh/setup-uv@v6'
+        with:
+          version: "0.8.17"
+          enable-cache: true
+
+      - name: Setup Python
+        uses: 'actions/setup-python@v6'
+        with:
+          python-version-file: ".python-version"
+
+      - name: Install Dependencies
+        run: uv sync
+
+      - name: Run Checks
+        run: uv run poe check
+
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: 'read'
+
+    steps:
+      - name: Clone the code
+        uses: 'actions/checkout@v5'
+
+      - name: Install uv
+        uses: 'astral-sh/setup-uv@v6'
+        with:
+          version: "0.8.17"
+          enable-cache: true
+
+      - name: Setup Python
+        uses: 'actions/setup-python@v6'
+        with:
+          python-version-file: ".python-version"
+
+      - name: Install Dependencies
+        run: uv sync
+
+      - name: Run Tests
+        run: uv run poe test
+
+  push:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    outputs:
+      image-tags: ${{ steps.build-push.outputs.image-tags }}
+
+    steps:
+      - name: 'Checkout'
+        uses: 'actions/checkout@v5'
+        with:
+          fetch-depth: 0
+
+      - name: Build and push Docker image
+        id: build-push
+        uses: ./.github/actions/build-push-image
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+  test-e2e:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    needs: push
+    timeout-minutes: 30
+    env:
+      GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+
+    steps:
+      - name: Clone the code
+        uses: 'actions/checkout@v5'
+
+      - name: Extract image tag
+        id: extract-tag
+        run: |
+          # Get the first tag from the newline-separated list
+          IMAGE_TAG=$(echo "${{ needs.push.outputs.image-tags }}" | head -n 1)
+          echo "image-tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
+          echo "Using image: ${IMAGE_TAG}"
+
+      - name: Set up Kubernetes (kind)
+        uses: 'helm/kind-action@v1'
+        with:
+          cluster_name: 'kind'
+
+      - name: Install Tilt
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/tilt-dev/tilt/master/scripts/install.sh | bash
+          tilt version
+
+      - name: Run Tilt CI
+        run: tilt ci
+
+      - name: Setup Testkube CLI
+        uses: kubeshop/setup-testkube@v1
+
+      - name: Run Test Workflow
+        run: |
+          testkube run testworkflow ragas-evaluation-workflow \
+              --config datasetUrl="http://data-server.data-server:8000/dataset.csv" \
+              --config agentUrl="http://agent-gateway-krakend.agent-gateway-krakend:10000/weather-agent" \
+              --config metrics="nv_accuracy context_recall" \
+              --config workflowName="Testworkflow-Name" \
+              --config image="${{ steps.extract-tag.outputs.image-tag }}" \
+              -n testkube \
+              --watch
