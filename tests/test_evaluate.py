@@ -218,7 +218,7 @@ def test_main_successful_execution(experiment_data, monkeypatch):
         class MockChatOpenAI:
             pass
 
-        def mock_chat_openai_init(model):
+        def mock_chat_openai_init(model, api_key):
             return MockChatOpenAI()
 
         class MockLLMWrapper:
