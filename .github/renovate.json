@@ -1,0 +1,13 @@
+{
+  "extends": [
+    "github>agentic-layer/renovate-config"
+  ],
+  "automergeType": "pr",
+  "packageRules": [
+    {
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["python"],
+      "allowedVersions": "< 3.14"
+    }
+  ]
+}
