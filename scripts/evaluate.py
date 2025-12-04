@@ -163,7 +163,10 @@ def main(
         raise ArgumentError(argument=metrics, message="No metrics were provided as arguments")
 
     # Create LLM client using the AI-Gateway
-    ragas_llm: ChatOpenAI = ChatOpenAI(model=model)
+    # Setting a placeholder for the api_key since we instantiate a ChatOpenAI object,
+    # but the AI-Gateway actually uses Gemini under the hood.
+    # Not setting api_key here results in an OpenAIError
+    ragas_llm: ChatOpenAI = ChatOpenAI(model=model, api_key="123")
     llm = LangchainLLMWrapper(ragas_llm)  # type: ignore[arg-type]
 
     dataset = EvaluationDataset.from_jsonl("data/experiments/ragas_experiment.jsonl")

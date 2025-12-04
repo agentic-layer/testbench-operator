@@ -49,7 +49,7 @@ This project provides a complete pipeline for evaluating AI agent performance:
 - [Getting Started](#getting-started)
   - [Setup with Testkube](#setup-with-testkube)
   - [Local Setup](#local-setup)
-- [Detailed Usage](#detailed-usage)
+- [Detailed Usage & Troubleshooting](#detailed-usage--troubleshooting)
 - [Dataset Requirements](#dataset-requirements)
 - [Testing](#testing)
 - [Development](#development)
@@ -101,20 +101,22 @@ OpenTelemetry Collector
 - **Testkube CLI**
 - **Kubernetes Cluster**: either cloud-deployed or locally (e.g. kind)
 - **Docker**
-- **API Key**: `OPENAI_API_KEY` environment variable (required for LLM-based evaluation)
+- **API Key**: `GOOGLE_API_KEY` environment variable
 - **OTLP Endpoint**: Optional, defaults to `localhost:4318`
 
 ### Local Setup
 
 - **Python 3.13+**
-- **API Key**: `OPENAI_API_KEY` environment variable (required for LLM-based evaluation)
+- **API Key**: `GOOGLE_API_KEY` environment variable
 - **OTLP Endpoint**: Optional, defaults to `localhost:4318`
 
 ----
 
 ## Getting Started
 
-Use Tilt to spin up all the required backends:
+1. Create a `.env` file in the root directory
+2. Set the `GOOGLE_API_KEY=` variable in the `.env`
+3. Use Tilt to spin up all the required backends:
 
 ```shell
 # Start Tilt in the project root to set up the local Kubernetes environment:
@@ -141,7 +143,7 @@ Run the RAGAS evaluation workflow with all optional parameters:
 kubectl testkube run testworkflow ragas-evaluation-workflow \
     --config datasetUrl="http://data-server.data-server:8000/dataset.csv" \
     --config agentUrl="http://agent-gateway-krakend.agent-gateway-krakend:10000/weather-agent" \
-    --config metrics="nv_accuracy context_recall"
+    --config metrics="nv_accuracy context_recall" \
     --config workflowName="Testworkflow-Name" \
     --config image="ghcr.io/agentic-layer/testbench/testworkflows:latest" \
     --config model="gemini/gemini-2.5-flash" \
@@ -158,14 +160,14 @@ kubectl testkube run testworkflow ragas-evaluation-workflow \
 uv sync
 
 # Required for evaluation
-export OPENAI_API_KEY="your-api-key-here"
+export OPENAI_API_BASE="http://localhost:11001"
 ```
 
 #### Run the complete evaluation pipeline in 4 steps:
 
 ```shell
 # 1. Download and prepare dataset
-uv run python3 scripts/setup.py "https://example.com/dataset.csv"
+uv run python3 scripts/setup.py "https://localhost:11020/dataset.csv"
 
 # 2. Execute queries through your agent
 uv run python3 scripts/run.py "http://localhost:8000"
@@ -179,7 +181,8 @@ uv run python3 scripts/publish.py "my-agent-evaluation"
 
 ----
 
-## Detailed Usage
+## Detailed Usage & Troubleshooting
+
 See [Detailed Usage & Troubleshooting](DetailedUsageAndTroubleshooting.md)
 
 ----
@@ -248,13 +251,9 @@ uv run poe test
 ### End-to-End Tests
 
 The E2E Test (found at `tests_e2e/test_e2e.py`) runs a complete pipeline integration test - from setup.py to publish.py.
-The E2E Test can be run in different ways:
+The E2E Test can be run using the `poe` task runner:
 
 ```shell
-# Using Pytest directly
-uv run pytest tests_e2e/test_e2e.py -v
-
-# Using the task runner
 uv run poe test_e2e
 ```
 
@@ -264,7 +263,7 @@ To use custom endpoints, evaluation models or metrics you can set the following 
 
 ```shell
 export E2E_DATASET_URL="http://data-server.data-server:8000/dataset.csv"
-export E2E_AGENT_URL="http://agent-gateway-krakend.agent-gateway-krakend:10000/weather-agent
+export E2E_AGENT_URL="http://agent-gateway-krakend.agent-gateway-krakend:10000/weather-agent"
 export E2E_MODEL="gemini-2.5-flash-lite"
 export E2E_METRICS="faithfulness,answer_relevancy"
 export E2E_WORKFLOW_NAME="Test Workflow"
@@ -306,11 +305,6 @@ uv run poe test_e2e      # Execute end-to-end tests
 uv run poe format        # Code formatting
 uv run poe lint          # Auto-fix linting issues
 ```
-
-----
-
-## Detailed Usage
-See [Detailed Usage & Troubleshooting](DetailedUsageAndTroubleshooting.md)
 
 ----
 

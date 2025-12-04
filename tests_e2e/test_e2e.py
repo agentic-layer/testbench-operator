@@ -9,7 +9,7 @@ Usage:
     pytest tests/test_e2e.py
 
     # With custom configuration via environment variables:
-    E2E_DATASET_URL="https://example.com/data.csv" \
+    E2E_DATASET_URL="http://localhost:11020/dataset.csv" \
     E2E_AGENT_URL="http://localhost:8000" \
     E2E_MODEL="gemini-flash-latest" \
     E2E_METRICS="faithfulness,answer_relevancy" \
@@ -231,7 +231,7 @@ def test_e2e_pipeline():
     """
 
     # Get configuration from environment variables with sensible defaults
-    dataset_url = os.getenv("E2E_DATASET_URL", "http://data-server.data-server:8000/dataset.csv")
+    dataset_url = os.getenv("E2E_DATASET_URL", "http://localhost:11020/dataset.csv")
     agent_url = os.getenv("E2E_AGENT_URL", "http://localhost:11010")
     model = os.getenv("E2E_MODEL", "gemini-2.5-flash-lite")
     metrics_str = os.getenv("E2E_METRICS", "faithfulness")
