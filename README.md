@@ -1,6 +1,6 @@
 # Agentic Layer Test Bench - Automated Agent Evaluation System
 
-An automated evaluation and testing system for AI agents based on **Testkube** and using the **RAGAS**
+A **Kubernetes** native, automated evaluation and testing system for AI agents based on **Testkube** and using the **RAGAS**
 framework. This system downloads test datasets, executes queries through agents via the **A2A** protocol, evaluates
 responses using configurable metrics, and publishes results to **OpenTelemetry** for monitoring.
 
@@ -17,6 +17,29 @@ This project provides a complete pipeline for evaluating AI agent performance:
 - **Flexible Evaluation**: Evaluate agent replies using Ragas Metrics
 - **Observability**: Publish metrics to OpenTelemetry endpoints for monitoring and analysis
 
+### Example Output:
+
+```json
+{
+  "overall_scores": {
+    "faithfulness": 0.95,
+    "answer_relevancy": 0.98
+  },
+  "individual_results": [
+    {
+      "user_input": "What is the capital of France?",
+      "response": "Paris is the capital of France.",
+      "faithfulness": 0.95,
+      "answer_relevancy": 0.98
+    }
+  ],
+  "total_tokens": {
+    "input_tokens": 1500,
+    "output_tokens": 500
+  },
+  "total_cost": 0.015
+}
+```
 ----
 
 ## Table of Contents
@@ -26,7 +49,6 @@ This project provides a complete pipeline for evaluating AI agent performance:
 - [Getting Started](#getting-started)
   - [Setup with Testkube](#setup-with-testkube)
   - [Local Setup](#local-setup)
-- [Quick Start](#quick-start)
 - [Detailed Usage](#detailed-usage)
 - [Dataset Requirements](#dataset-requirements)
 - [Testing](#testing)
@@ -70,16 +92,19 @@ data/results/evaluation_scores.json
 OpenTelemetry Collector
 ```
 
-### Key Design Principles
-
-- **RAGAS-Native Format**: Uses RAGAS column names (`user_input`, `response`, `retrieved_contexts`, `reference`)
-  throughout
-- **JSONL Backend**: Internal storage uses JSONL for native list support
-- **Format-Aware Input**: Intelligent handling of CSV (list conversion), JSON, and Parquet formats
-
 ----
 
 ## Prerequisites
+
+### Setup with Testkube
+
+- **Testkube CLI**
+- **Kubernetes Cluster**: either cloud-deployed or locally (e.g. kind)
+- **Docker**
+- **API Key**: `OPENAI_API_KEY` environment variable (required for LLM-based evaluation)
+- **OTLP Endpoint**: Optional, defaults to `localhost:4318`
+
+### Local Setup
 
 - **Python 3.13+**
 - **API Key**: `OPENAI_API_KEY` environment variable (required for LLM-based evaluation)
@@ -92,7 +117,7 @@ OpenTelemetry Collector
 Use Tilt to spin up all the required backends:
 
 ```shell
-Start Tilt in the project root to set up the local Kubernetes environment:
+# Start Tilt in the project root to set up the local Kubernetes environment:
 tilt up
 ```
 
@@ -126,7 +151,7 @@ kubectl testkube run testworkflow ragas-evaluation-workflow \
 
 ### Local Setup
 
-### Dependencies & Environment Setup
+#### Dependencies & Environment Setup
 
 ```shell
 # Install dependencies with uv
@@ -136,7 +161,7 @@ uv sync
 export OPENAI_API_KEY="your-api-key-here"
 ```
 
-Run the complete evaluation pipeline in 4 steps:
+#### Run the complete evaluation pipeline in 4 steps:
 
 ```shell
 # 1. Download and prepare dataset
