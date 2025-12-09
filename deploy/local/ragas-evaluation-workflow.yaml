@@ -18,8 +18,6 @@ spec:
     workingDir: /app
     image: "{{ config.image }}"
     env:
-      - name: OPENAI_API_KEY
-        value: "123"
       - name: OPENAI_API_BASE
         value: "http://ai-gateway-litellm.ai-gateway:4000"
     volumeMounts:
