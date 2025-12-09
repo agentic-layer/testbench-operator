@@ -159,7 +159,7 @@ kubectl testkube run testworkflow ragas-evaluation-workflow \
 # Install dependencies with uv
 uv sync
 
-# Required for evaluation
+# Required for evaluation - routes requests through our AI Gateway
 export OPENAI_API_BASE="http://localhost:11001"
 ```
 
