@@ -7,7 +7,7 @@ update_settings(max_parallel_updates=10)
 load('ext://dotenv', 'dotenv')
 dotenv()
 
-v1alpha1.extension_repo(name='agentic-layer', url='https://github.com/agentic-layer/tilt-extensions', ref='v0.4.0')
+v1alpha1.extension_repo(name='agentic-layer', url='https://github.com/agentic-layer/tilt-extensions', ref='v0.6.0')
 
 v1alpha1.extension(name='cert-manager', repo_name='agentic-layer', repo_path='cert-manager')
 load('ext://cert-manager', 'cert_manager_install')
@@ -15,15 +15,15 @@ cert_manager_install()
 
 v1alpha1.extension(name='agent-runtime', repo_name='agentic-layer', repo_path='agent-runtime')
 load('ext://agent-runtime', 'agent_runtime_install')
-agent_runtime_install(version='0.13.0')
+agent_runtime_install(version='0.16.0')
 
 v1alpha1.extension(name='ai-gateway-litellm', repo_name='agentic-layer', repo_path='ai-gateway-litellm')
 load('ext://ai-gateway-litellm', 'ai_gateway_litellm_install')
-ai_gateway_litellm_install(version='0.2.0')
+ai_gateway_litellm_install(version='0.3.2')
 
 v1alpha1.extension(name='agent-gateway-krakend', repo_name='agentic-layer', repo_path='agent-gateway-krakend')
 load('ext://agent-gateway-krakend', 'agent_gateway_krakend_install')
-agent_gateway_krakend_install(version='0.2.0')
+agent_gateway_krakend_install(version='0.4.1')
 
 load('ext://helm_resource', 'helm_resource')
 helm_resource(
