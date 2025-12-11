@@ -17,6 +17,36 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 from publish import create_and_push_metrics, get_overall_scores, publish_metrics
 
 
+# Mock classes for OpenTelemetry meter provider (used by HTTPXClientInstrumentor)
+# Use underscore prefix to avoid naming conflicts with test-specific mock classes
+class _OtelMockMeter:
+    """Mock meter for instrumentation"""
+
+    def create_counter(self, name, **kwargs):
+        return _OtelMockCounter()
+
+    def create_histogram(self, name, **kwargs):
+        return _OtelMockHistogram()
+
+    def create_gauge(self, name, **kwargs):
+        return _OtelMockGauge()
+
+
+class _OtelMockCounter:
+    def add(self, amount, attributes=None):
+        pass
+
+
+class _OtelMockHistogram:
+    def record(self, amount, attributes=None):
+        pass
+
+
+class _OtelMockGauge:
+    def set(self, value, attributes=None):
+        pass
+
+
 # Fixtures
 @pytest.fixture
 def temp_dir():
@@ -117,6 +147,10 @@ def test_creates_gauges_for_each_metric(monkeypatch):
         def shutdown(self):
             pass
 
+        def get_meter(self, name, version=None, schema_url=None, attributes=None):
+            """Return a mock meter that HTTPXClientInstrumentor can use"""
+            return _OtelMockMeter()
+
     def mock_provider_init(**kwargs):
         return MockProvider()
 
@@ -174,6 +208,10 @@ def test_sets_gauge_values(monkeypatch):
 
         def shutdown(self):
             pass
+
+        def get_meter(self, name, version=None, schema_url=None, attributes=None):
+            """Return a mock meter that HTTPXClientInstrumentor can use"""
+            return _OtelMockMeter()
 
     def mock_provider_init(**kwargs):
         return MockProvider()
@@ -403,6 +441,10 @@ def test_publish_realistic_scores(realistic_scores_file, monkeypatch):
 
         def shutdown(self):
             pass
+
+        def get_meter(self, name, version=None, schema_url=None, attributes=None):
+            """Return a mock meter that HTTPXClientInstrumentor can use"""
+            return _OtelMockMeter()
 
     def mock_provider_init(**kwargs):
         return MockProvider()
