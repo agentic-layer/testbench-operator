@@ -161,6 +161,7 @@ uv sync
 
 # Required for evaluation - routes requests through our AI Gateway
 export OPENAI_API_BASE="http://localhost:11001"
+export OPENAI_API_KEY="dummy-key-for-litellm"
 ```
 
 #### Run the complete evaluation pipeline in 4 steps:

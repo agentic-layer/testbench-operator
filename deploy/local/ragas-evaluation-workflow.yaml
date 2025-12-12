@@ -57,7 +57,7 @@ spec:
     otlpEndpoint:
       type: string
       description: "OTLP endpoint URL"
-      default: "http://lgtm.monitoring:4318"
+      default: "http://otel-collector.monitoring.svc.cluster.local:4318"
 
     # Docker image
     image:
