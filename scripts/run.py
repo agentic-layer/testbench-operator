@@ -16,10 +16,9 @@ from a2a.types import (
 )
 from opentelemetry import trace
 from opentelemetry.trace import Status, StatusCode
+from otel_setup import setup_otel
 from pydantic import BaseModel
 from ragas import Dataset, experiment
-
-from otel_setup import setup_otel
 
 # Set up module-level logger
 logging.basicConfig(level=logging.INFO)
