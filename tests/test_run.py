@@ -111,9 +111,7 @@ async def test_run_agent_experiment_success(monkeypatch):
 
     # Call the function
     result = await run_agent_experiment.func(
-        test_row,
-        agent_url="http://test-agent:8000",
-        workflow_name="test-workflow"
+        test_row, agent_url="http://test-agent:8000", workflow_name="test-workflow"
     )
 
     # Verify result structure
@@ -156,9 +154,7 @@ async def test_run_agent_experiment_error(monkeypatch):
 
     # Call the function
     result = await run_agent_experiment.func(
-        test_row,
-        agent_url="http://test-agent:8000",
-        workflow_name="test-workflow"
+        test_row, agent_url="http://test-agent:8000", workflow_name="test-workflow"
     )
 
     # Verify error is captured in response
