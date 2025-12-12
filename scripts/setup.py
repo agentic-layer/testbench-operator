@@ -58,7 +58,8 @@ def get_converter(url: str) -> Callable[[BytesIO], DataFrame]:
 
 def custom_convert_csv(input_file: BytesIO) -> DataFrame:
     """
-    Converts a CSV input file to a Pandas DataFrame and, if it exists, turns 'retrieved_contexts' into a list (RAGAS requires 'retrieved_contexts' as a list of strings)
+    Converts a CSV input file to a Pandas DataFrame and, if it exists, turns 'retrieved_contexts' into a list
+    (RAGAS requires 'retrieved_contexts' as a list of strings)
 
     Args:
         input_file: The CSV input_file

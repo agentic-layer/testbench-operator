@@ -5,6 +5,7 @@ Tests the OpenTelemetry OTLP metrics publishing functionality.
 """
 
 import json
+import math
 import shutil
 import sys
 import tempfile
@@ -14,7 +15,37 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from publish import create_and_push_metrics, get_overall_scores, publish_metrics
+from publish import EvaluationData, _is_metric_value, create_and_push_metrics, load_evaluation_data, publish_metrics
+
+
+# Mock classes for OpenTelemetry meter provider (used by HTTPXClientInstrumentor)
+# Use underscore prefix to avoid naming conflicts with test-specific mock classes
+class _OtelMockMeter:
+    """Mock meter for instrumentation"""
+
+    def create_counter(self, name, **kwargs):
+        return _OtelMockCounter()
+
+    def create_histogram(self, name, **kwargs):
+        return _OtelMockHistogram()
+
+    def create_gauge(self, name, **kwargs):
+        return _OtelMockGauge()
+
+
+class _OtelMockCounter:
+    def add(self, amount, attributes=None):
+        pass
+
+
+class _OtelMockHistogram:
+    def record(self, amount, attributes=None):
+        pass
+
+
+class _OtelMockGauge:
+    def set(self, value, attributes=None):
+        pass
 
 
 # Fixtures
@@ -28,13 +59,28 @@ def temp_dir():
 
 @pytest.fixture
 def evaluation_scores_file(temp_dir):
-    """Create a test evaluation scores file"""
+    """Create a test evaluation scores file with individual results"""
     test_file = Path(temp_dir) / "evaluation_scores.json"
     test_data = {
         "overall_scores": {"faithfulness": 0.85, "answer_relevancy": 0.90},
-        "individual_results": [],
-        "total_tokens": {"input_tokens": 0, "output_tokens": 0},
-        "total_cost": 0.0,
+        "individual_results": [
+            {
+                "user_input": "What is the weather?",
+                "response": "It is sunny.",
+                "faithfulness": 0.85,
+                "answer_relevancy": 0.90,
+                "trace_id": "a1b2c3d4e5f6789012345678901234aa",
+            },
+            {
+                "user_input": "What is the time?",
+                "response": "It is noon.",
+                "faithfulness": 0.80,
+                "answer_relevancy": 0.95,
+                "trace_id": "b2c3d4e5f6a7890123456789012345bb",
+            },
+        ],
+        "total_tokens": {"input_tokens": 1000, "output_tokens": 200},
+        "total_cost": 0.05,
     }
 
     with open(test_file, "w") as f:
@@ -60,10 +106,13 @@ def realistic_scores_file(temp_dir):
                 "response": "It is sunny.",
                 "faithfulness": 0.85,
                 "answer_relevancy": 0.90,
+                "context_precision": 0.78,
+                "context_recall": 0.82,
+                "trace_id": "c3d4e5f6a7b8901234567890123456cc",
             }
         ],
-        "total_tokens": {"input_tokens": 0, "output_tokens": 0},
-        "total_cost": 0.0,
+        "total_tokens": {"input_tokens": 500, "output_tokens": 100},
+        "total_cost": 0.025,
     }
 
     with open(test_file, "w") as f:
@@ -72,25 +121,62 @@ def realistic_scores_file(temp_dir):
     return test_file
 
 
-# TestGetOverallScores tests
-def test_loads_overall_scores(evaluation_scores_file):
-    """Test that get_overall_scores loads the overall_scores section"""
-    scores = get_overall_scores(str(evaluation_scores_file))
+# Test _is_metric_value
+def test_is_metric_value_with_float():
+    """Test that valid floats are recognized as metric values"""
+    assert _is_metric_value(0.85) is True
+    assert _is_metric_value(1.0) is True
+    assert _is_metric_value(0.0) is True
 
-    assert scores["faithfulness"] == 0.85
-    assert scores["answer_relevancy"] == 0.90
+
+def test_is_metric_value_with_int():
+    """Test that integers are recognized as metric values"""
+    assert _is_metric_value(1) is True
+    assert _is_metric_value(0) is True
+
+
+def test_is_metric_value_with_nan():
+    """Test that NaN is not recognized as a metric value"""
+    assert _is_metric_value(float("nan")) is False
+    assert _is_metric_value(math.nan) is False
+
+
+def test_is_metric_value_with_non_numeric():
+    """Test that non-numeric values are not recognized as metric values"""
+    assert _is_metric_value("string") is False
+    assert _is_metric_value(["list"]) is False
+    assert _is_metric_value({"dict": "value"}) is False
+    assert _is_metric_value(None) is False
+
+
+# Test load_evaluation_data
+def test_loads_evaluation_data(evaluation_scores_file):
+    """Test that load_evaluation_data loads all required fields"""
+    data = load_evaluation_data(str(evaluation_scores_file))
+
+    assert len(data.individual_results) == 2
+    assert data.total_tokens["input_tokens"] == 1000
+    assert data.total_tokens["output_tokens"] == 200
+    assert data.total_cost == 0.05
 
 
 def test_file_not_found(temp_dir):
     """Test behavior when file doesn't exist"""
     with pytest.raises(FileNotFoundError):
-        get_overall_scores(str(Path(temp_dir) / "nonexistent.json"))
+        load_evaluation_data(str(Path(temp_dir) / "nonexistent.json"))
 
 
 # TestCreateAndPushMetrics tests
 def test_creates_gauges_for_each_metric(monkeypatch):
-    """Test that a Gauge is created for each metric"""
-    overall_scores = {"faithfulness": 0.85, "answer_relevancy": 0.90}
+    """Test that a Gauge is created for each metric plus token/cost gauges"""
+    evaluation_data = EvaluationData(
+        individual_results=[
+            {"user_input": "Question 1", "faithfulness": 0.85, "answer_relevancy": 0.90, "trace_id": "trace1"},
+            {"user_input": "Question 2", "faithfulness": 0.80, "answer_relevancy": 0.95, "trace_id": "trace2"},
+        ],
+        total_tokens={"input_tokens": 1000, "output_tokens": 200},
+        total_cost=0.05,
+    )
 
     # Mock the meter and gauge
     create_gauge_calls = []
@@ -117,6 +203,10 @@ def test_creates_gauges_for_each_metric(monkeypatch):
         def shutdown(self):
             pass
 
+        def get_meter(self, name, version=None, schema_url=None, attributes=None):
+            """Return a mock meter that HTTPXClientInstrumentor can use"""
+            return _OtelMockMeter()
+
     def mock_provider_init(**kwargs):
         return MockProvider()
 
@@ -133,34 +223,45 @@ def test_creates_gauges_for_each_metric(monkeypatch):
     monkeypatch.setattr("publish.OTLPMetricExporter", mock_exporter_init)
 
     create_and_push_metrics(
-        overall_scores=overall_scores,
+        evaluation_data=evaluation_data,
         workflow_name="test-workflow",
         otlp_endpoint="localhost:4318",
     )
 
-    # Verify create_gauge was called for each metric
-    assert len(create_gauge_calls) == 2
+    # Verify gauges created: 1 metric gauge + 1 token gauge + 1 cost gauge = 3
+    assert len(create_gauge_calls) == 3
 
     # Verify gauge names
     gauge_names = [call["name"] for call in create_gauge_calls]
-    assert "ragas_evaluation_faithfulness" in gauge_names
-    assert "ragas_evaluation_answer_relevancy" in gauge_names
+    assert "testbench_evaluation_metric" in gauge_names
+    assert "testbench_evaluation_token_usage" in gauge_names
+    assert "testbench_evaluation_cost" in gauge_names
 
 
-def test_sets_gauge_values(monkeypatch):
-    """Test that gauge values are set correctly"""
-    overall_scores = {"faithfulness": 0.85}
+def test_sets_per_sample_gauge_values(monkeypatch):
+    """Test that gauge values are set for each sample with user_input and trace_id attributes"""
+    evaluation_data = EvaluationData(
+        individual_results=[
+            {"user_input": "Question 1", "faithfulness": 0.85, "trace_id": "d4e5f6a7b8c9012345678901234567dd"},
+            {"user_input": "Question 2", "faithfulness": 0.80, "trace_id": "e5f6a7b8c9d0123456789012345678ee"},
+        ],
+        total_tokens={"input_tokens": 0, "output_tokens": 0},
+        total_cost=0.0,
+    )
 
     # Mock the meter and gauge
     set_calls = []
 
     class MockGauge:
+        def __init__(self, name):
+            self.name = name
+
         def set(self, value, attributes):
-            set_calls.append({"value": value, "attributes": attributes})
+            set_calls.append({"name": self.name, "value": value, "attributes": attributes})
 
     class MockMeter:
         def create_gauge(self, name, unit=None, description=None):
-            return MockGauge()
+            return MockGauge(name)
 
     mock_meter = MockMeter()
 
@@ -175,6 +276,10 @@ def test_sets_gauge_values(monkeypatch):
         def shutdown(self):
             pass
 
+        def get_meter(self, name, version=None, schema_url=None, attributes=None):
+            """Return a mock meter that HTTPXClientInstrumentor can use"""
+            return _OtelMockMeter()
+
     def mock_provider_init(**kwargs):
         return MockProvider()
 
@@ -191,20 +296,37 @@ def test_sets_gauge_values(monkeypatch):
     monkeypatch.setattr("publish.OTLPMetricExporter", mock_exporter_init)
 
     create_and_push_metrics(
-        overall_scores=overall_scores,
+        evaluation_data=evaluation_data,
         workflow_name="test-workflow",
         otlp_endpoint="localhost:4318",
     )
 
-    # Verify gauge.set was called with correct value and attributes
-    assert len(set_calls) == 1
-    assert set_calls[0]["value"] == 0.85
-    assert set_calls[0]["attributes"] == {"workflow_name": "test-workflow"}
+    # Filter to faithfulness metric calls only (name attribute = "faithfulness")
+    faithfulness_calls = [
+        c
+        for c in set_calls
+        if c["name"] == "testbench_evaluation_metric" and c["attributes"].get("name") == "faithfulness"
+    ]
+    assert len(faithfulness_calls) == 2
+
+    # Verify gauge.set was called with correct values, user_input, and trace_id attributes
+    assert faithfulness_calls[0]["value"] == 0.85
+    assert faithfulness_calls[0]["attributes"]["workflow_name"] == "test-workflow"
+    assert faithfulness_calls[0]["attributes"]["user_input"] == "Question 1"
+    assert faithfulness_calls[0]["attributes"]["trace_id"] == "d4e5f6a7b8c9012345678901234567dd"
+
+    assert faithfulness_calls[1]["value"] == 0.80
+    assert faithfulness_calls[1]["attributes"]["user_input"] == "Question 2"
+    assert faithfulness_calls[1]["attributes"]["trace_id"] == "e5f6a7b8c9d0123456789012345678ee"
 
 
 def test_pushes_via_otlp(monkeypatch):
     """Test that metrics are pushed via OTLP"""
-    overall_scores = {"faithfulness": 0.85}
+    evaluation_data = EvaluationData(
+        individual_results=[{"user_input": "Q1", "faithfulness": 0.85, "trace_id": "f6a7b8c9d0e1234567890123456789ff"}],
+        total_tokens={"input_tokens": 100, "output_tokens": 50},
+        total_cost=0.01,
+    )
 
     # Mock the meter and gauge
     class MockGauge:
@@ -250,7 +372,7 @@ def test_pushes_via_otlp(monkeypatch):
     monkeypatch.setattr("publish.OTLPMetricExporter", mock_exporter_init)
 
     create_and_push_metrics(
-        overall_scores=overall_scores,
+        evaluation_data=evaluation_data,
         workflow_name="test-workflow",
         otlp_endpoint="localhost:4318",
     )
@@ -266,7 +388,11 @@ def test_pushes_via_otlp(monkeypatch):
 
 def test_handles_push_error(monkeypatch):
     """Test error handling when OTLP export fails"""
-    overall_scores = {"faithfulness": 0.85}
+    evaluation_data = EvaluationData(
+        individual_results=[{"user_input": "Q1", "faithfulness": 0.85, "trace_id": "a7b8c9d0e1f2345678901234567890aa"}],
+        total_tokens={"input_tokens": 0, "output_tokens": 0},
+        total_cost=0.0,
+    )
 
     # Mock the meter and gauge
     class MockGauge:
@@ -309,7 +435,7 @@ def test_handles_push_error(monkeypatch):
 
     with pytest.raises(Exception, match="Connection refused"):
         create_and_push_metrics(
-            overall_scores=overall_scores,
+            evaluation_data=evaluation_data,
             workflow_name="test-workflow",
             otlp_endpoint="localhost:4318",
         )
@@ -323,10 +449,10 @@ def test_publish_metrics_calls_create_and_push(evaluation_scores_file, monkeypat
     """Test that publish_metrics calls create_and_push_metrics"""
     create_push_calls = []
 
-    def mock_create_push(overall_scores, workflow_name, otlp_endpoint):
+    def mock_create_push(evaluation_data, workflow_name, otlp_endpoint):
         create_push_calls.append(
             {
-                "overall_scores": overall_scores,
+                "evaluation_data": evaluation_data,
                 "workflow_name": workflow_name,
                 "otlp_endpoint": otlp_endpoint,
             }
@@ -344,16 +470,20 @@ def test_publish_metrics_calls_create_and_push(evaluation_scores_file, monkeypat
     assert len(create_push_calls) == 1
 
     # Verify parameters
-    assert create_push_calls[0]["overall_scores"]["faithfulness"] == 0.85
-    assert create_push_calls[0]["overall_scores"]["answer_relevancy"] == 0.90
+    assert len(create_push_calls[0]["evaluation_data"].individual_results) == 2
     assert create_push_calls[0]["workflow_name"] == "test-workflow"
     assert create_push_calls[0]["otlp_endpoint"] == "localhost:4318"
 
 
-def test_publish_metrics_with_empty_scores(temp_dir, monkeypatch):
-    """Test behavior when overall_scores is empty"""
-    # Create file with empty overall_scores
-    test_data = {"overall_scores": {}, "individual_results": []}
+def test_publish_metrics_with_empty_results(temp_dir, monkeypatch):
+    """Test behavior when individual_results is empty"""
+    # Create file with empty individual_results
+    test_data = {
+        "overall_scores": {},
+        "individual_results": [],
+        "total_tokens": {"input_tokens": 0, "output_tokens": 0},
+        "total_cost": 0.0,
+    }
 
     empty_file = Path(temp_dir) / "empty_scores.json"
     with open(empty_file, "w") as f:
@@ -361,7 +491,7 @@ def test_publish_metrics_with_empty_scores(temp_dir, monkeypatch):
 
     create_push_calls = []
 
-    def mock_create_push(overall_scores, workflow_name, otlp_endpoint):
+    def mock_create_push(evaluation_data, workflow_name, otlp_endpoint):
         create_push_calls.append(True)
 
     monkeypatch.setattr("publish.create_and_push_metrics", mock_create_push)
@@ -404,6 +534,10 @@ def test_publish_realistic_scores(realistic_scores_file, monkeypatch):
         def shutdown(self):
             pass
 
+        def get_meter(self, name, version=None, schema_url=None, attributes=None):
+            """Return a mock meter that HTTPXClientInstrumentor can use"""
+            return _OtelMockMeter()
+
     def mock_provider_init(**kwargs):
         return MockProvider()
 
@@ -431,5 +565,10 @@ def test_publish_realistic_scores(realistic_scores_file, monkeypatch):
     # Verify OTLPMetricExporter was called
     assert len(exporter_calls) == 1
 
-    # Verify 4 metrics were created (faithfulness, answer_relevancy, context_precision, context_recall)
-    assert len(create_gauge_calls) == 4
+    # Verify 3 gauges: 1 metric gauge + 1 token gauge + 1 cost gauge
+    assert len(create_gauge_calls) == 3
+
+    gauge_names = [call["name"] for call in create_gauge_calls]
+    assert "testbench_evaluation_metric" in gauge_names
+    assert "testbench_evaluation_token_usage" in gauge_names
+    assert "testbench_evaluation_cost" in gauge_names
