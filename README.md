@@ -174,7 +174,7 @@ uv run python3 scripts/setup.py "http://localhost:11020/dataset.csv"
 uv run python3 scripts/run.py "http://localhost:11010"
 
 # 3. Evaluate responses with RAGAS metrics
-uv run python3 scripts/evaluate.py gemini-2.5-flash-lite faithfulness answer_relevancy
+OPENAI_API_BASE="http://localhost:11001" uv run python3 scripts/evaluate.py gemini-2.5-flash-lite faithfulness answer_relevancy
 
 # 4. Publish metrics to OpenTelemetry
 uv run python3 scripts/publish.py "my-agent-evaluation"
