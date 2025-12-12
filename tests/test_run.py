@@ -110,7 +110,11 @@ async def test_run_agent_experiment_success(monkeypatch):
     }
 
     # Call the function
-    result = await run_agent_experiment.func(test_row, agent_url="http://test-agent:8000")
+    result = await run_agent_experiment.func(
+        test_row,
+        agent_url="http://test-agent:8000",
+        workflow_name="test-workflow"
+    )
 
     # Verify result structure
     assert "user_input" in result
@@ -151,7 +155,11 @@ async def test_run_agent_experiment_error(monkeypatch):
     }
 
     # Call the function
-    result = await run_agent_experiment.func(test_row, agent_url="http://test-agent:8000")
+    result = await run_agent_experiment.func(
+        test_row,
+        agent_url="http://test-agent:8000",
+        workflow_name="test-workflow"
+    )
 
     # Verify error is captured in response
     assert "response" in result
@@ -202,12 +210,15 @@ async def test_main_execution(temp_dir, monkeypatch):
         monkeypatch.setattr("run.run_agent_experiment.arun", mock_arun_tracked)
 
         # Run main
-        await main("http://test-agent:8000")
+        await main("http://test-agent:8000", "test-workflow")
 
         # Verify Dataset.load was called
         assert len(calls_to_load) == 1
 
         # Verify experiment was run
         assert len(calls_to_arun) == 1
+
+        # Verify workflow_name was passed through to arun
+        assert calls_to_arun[0]["kwargs"]["workflow_name"] == "test-workflow"
     finally:
         os.chdir(original_cwd)
