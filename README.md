@@ -275,6 +275,18 @@ uv run pytest tests_e2e/test_e2e.py -v
 
 ## Development
 
+### Deployment Structure
+
+```
+deploy/
+  base/                    # Shared resources for all environments
+    templates/             # Testkube TestWorkflowTemplates
+    grafana-dashboards/    # Dashboard ConfigMaps (auto-discovered via grafana_dashboard label)
+  local/                   # Local Tilt environment (uses LGTM all-in-one)
+  dev/                     # Dev cluster environment (uses Grafana sidecar for dashboard discovery)
+```
+
+
 ## Code Quality Standards
 
 ### Code Style:
