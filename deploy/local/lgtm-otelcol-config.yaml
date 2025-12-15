@@ -4,7 +4,7 @@ metadata:
   name: otelcol-config
   namespace: monitoring
 data:
-  otelcol-config.yaml: |
+  lgtm-otelcol-config.yaml: |
     receivers:
       otlp:
         protocols:
@@ -22,6 +22,13 @@ data:
               scrape_interval: 1s
               static_configs:
                 - targets: ["127.0.0.1:8888"]
+      prometheus/testkube:
+        config:
+          scrape_configs:
+            - job_name: "testkube-api"
+              scrape_interval: 15s
+              static_configs:
+                - targets: ["testkube-api-server.testkube:8088"]
     
     extensions:
       health_check:
@@ -48,12 +55,6 @@ data:
         endpoint: http://127.0.0.1:4040
         tls:
           insecure: true
-      debug/metrics:
-        verbosity: detailed
-      debug/traces:
-        verbosity: detailed
-      debug/logs:
-        verbosity: detailed
     
     service:
       extensions: [health_check]
@@ -64,7 +65,7 @@ data:
           exporters: [otlphttp/traces]
           #exporters: [otlphttp/traces,debug/traces]
         metrics:
-          receivers: [otlp, prometheus/collector]
+          receivers: [otlp, prometheus/collector, prometheus/testkube]
           processors: [batch]
           exporters: [otlphttp/metrics]
           #exporters: [otlphttp/metrics,debug/metrics]
