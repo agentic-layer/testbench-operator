@@ -30,7 +30,8 @@ helm_resource(
     'testkube',
     'oci://docker.io/kubeshop/testkube',
     namespace='testkube',
-    flags=['--version=2.4.2', '--create-namespace', '--values=deploy/local/testkube/values.yaml', '--wait', '--wait-for-jobs'],
+    flags=['--version=2.4.2', '--create-namespace', '--values=deploy/local/testkube/values.yaml', '--wait',
+    '--wait-for-jobs', '--timeout=10m'],
 )
 
 # Apply Kubernetes manifests
