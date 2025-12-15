@@ -74,6 +74,15 @@ spec:
               mountPath: /data/prometheus
             - name: pyroscope-storage
               mountPath: /data/pyroscope
+            - name: grafana-dashboard-provisioning
+              # Provisioning config that tells Grafana to scan the testbench-dashboards directory
+              mountPath: /otel-lgtm/grafana/conf/provisioning/dashboards/testbench-dashboards.yaml
+              subPath: testbench-dashboards.yaml
+            - name: grafana-dashboards
+              mountPath: /etc/grafana/provisioning/dashboards/testbench-dashboards
+            - name: otelcol-config
+              mountPath: /otel-lgtm/otelcol-config.yaml
+              subPath: lgtm-otelcol-config.yaml
       volumes:
         - name: tempo-data
           emptyDir: {}
@@ -87,3 +96,12 @@ spec:
           emptyDir: {}
         - name: pyroscope-storage
           emptyDir: {}
+        - name: grafana-dashboards
+          configMap:
+            name: grafana-testkube-dashboard
+        - name: grafana-dashboard-provisioning
+          configMap:
+            name: grafana-dashboard-provisioning
+        - name: otelcol-config
+          configMap:
+            name: otelcol-config
