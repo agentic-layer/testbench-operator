@@ -161,16 +161,17 @@ uv sync
 
 # Required for evaluation - routes requests through our AI Gateway
 export OPENAI_API_BASE="http://localhost:11001"
+export OPENAI_API_KEY="dummy-key-for-litellm"
 ```
 
 #### Run the complete evaluation pipeline in 4 steps:
 
 ```shell
 # 1. Download and prepare dataset
-uv run python3 scripts/setup.py "https://localhost:11020/dataset.csv"
+uv run python3 scripts/setup.py "http://localhost:11020/dataset.csv"
 
 # 2. Execute queries through your agent
-uv run python3 scripts/run.py "http://localhost:8000"
+uv run python3 scripts/run.py "http://localhost:11010"
 
 # 3. Evaluate responses with RAGAS metrics
 uv run python3 scripts/evaluate.py gemini-2.5-flash-lite faithfulness answer_relevancy

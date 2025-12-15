@@ -91,24 +91,41 @@ def format_evaluation_scores(
     ragas_result: EvaluationResult,
     cost_per_input_token: float,
     cost_per_output_token: float,
+    experiment_file: str,
 ) -> EvaluationScores:
     """
     Format the RAGAS evaluation results.
 
     Args:
         ragas_result: The result object from RAGAS evaluate()
-        experiment: Ragas Experiment containing the original results
-        metrics: List of metric names used
+        cost_per_input_token: Cost per input token
+        cost_per_output_token: Cost per output token
+        experiment_file: Path to experiment JSONL file (to extract trace_ids)
 
     Returns:
         Formatted dictionary matching the required structure
     """
+
+    # Load trace_ids from experiment file (RAGAS drops custom fields during processing)
+    trace_ids = []
+    with open(experiment_file, "r") as f:
+        for line in f:
+            data = json.loads(line)
+            trace_ids.append(data.get("trace_id"))
 
     # Calculate overall scores (mean of each metric)
     overall_scores = ragas_result._repr_dict
 
     # Build individual results
     individual_results = ragas_result.to_pandas().to_dict(orient="records")
+
+    # Merge trace_ids back into individual_results (preserve by row order)
+    for i, result in enumerate(individual_results):
+        if i < len(trace_ids):
+            result["trace_id"] = trace_ids[i]
+        else:
+            logger.warning(f"No trace_id found for result {i}")
+            result["trace_id"] = None
 
     # Extract token usage and calculate cost using TokenUsageParser
     # Check if token usage data was collected (some metrics don't use LLMs or use separate LLM instances)
@@ -191,6 +208,7 @@ def main(
         ragas_result,
         cost_per_input_token=cost_per_input_token,
         cost_per_output_token=cost_per_output_token,
+        experiment_file="data/experiments/ragas_experiment.jsonl",
     )
 
     # Ensure output directory exists

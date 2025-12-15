@@ -57,7 +57,7 @@ def create_and_push_metrics(overall_scores: dict[str, float], workflow_name: str
         logger.info(f"Pushing metrics to OTLP endpoint at {otlp_endpoint}...")
 
         for metric_name, score in overall_scores.items():
-            # Create a Gauge (using UpDownCounter as closest equivalent)
+            # Create a Gauge
             gauge = meter.create_gauge(
                 name=f"ragas_evaluation_{metric_name}",
                 description=f"Overall {metric_name} score from RAGAS evaluation",

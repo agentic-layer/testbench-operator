@@ -47,6 +47,7 @@ def experiment_data(temp_dir):
             "retrieved_contexts": ["Context about weather"],
             "reference": "Expected answer",
             "response": "The weather is sunny.",
+            "trace_id": "a1b2c3d4e5f6789012345678901234ab",
         }
     ]
 
@@ -58,8 +59,19 @@ def experiment_data(temp_dir):
 
 
 # TestFormatEvaluationScores tests
-def test_overall_scores_calculation():
+def test_overall_scores_calculation(tmp_path):
     """Test that overall scores are calculated correctly"""
+
+    # Create temporary experiment file with trace_ids
+    experiment_file = tmp_path / "experiment.jsonl"
+    test_data = [
+        {"trace_id": "trace1"},
+        {"trace_id": "trace2"},
+        {"trace_id": "trace3"},
+    ]
+    with open(experiment_file, "w") as f:
+        for item in test_data:
+            f.write(json.dumps(item) + "\n")
 
     # Create mock result
     class MockTokenUsage:
@@ -81,15 +93,25 @@ def test_overall_scores_calculation():
 
     mock_result = MockResult()
 
-    formatted = format_evaluation_scores(mock_result, 5.0 / 1e6, 15.0 / 1e6)
+    formatted = format_evaluation_scores(mock_result, 5.0 / 1e6, 15.0 / 1e6, str(experiment_file))
 
     # Verify overall scores are correct
     assert abs(formatted.overall_scores["faithfulness"] - 0.8) < 0.01
     assert abs(formatted.overall_scores["answer_relevancy"] - 0.75) < 0.01
 
 
-def test_individual_results_present():
+def test_individual_results_present(tmp_path):
     """Test that individual results are included"""
+
+    # Create temporary experiment file with trace_ids
+    experiment_file = tmp_path / "experiment.jsonl"
+    test_data = [
+        {"trace_id": "trace1"},
+        {"trace_id": "trace2"},
+    ]
+    with open(experiment_file, "w") as f:
+        for item in test_data:
+            f.write(json.dumps(item) + "\n")
 
     # Create mock result
     class MockTokenUsage:
@@ -111,14 +133,21 @@ def test_individual_results_present():
 
     mock_result = MockResult()
 
-    formatted = format_evaluation_scores(mock_result, 5.0 / 1e6, 15.0 / 1e6)
+    formatted = format_evaluation_scores(mock_result, 5.0 / 1e6, 15.0 / 1e6, str(experiment_file))
 
     # Verify individual results
     assert len(formatted.individual_results) == 2
 
 
-def test_token_usage_placeholders():
+def test_token_usage_placeholders(tmp_path):
     """Test that token usage placeholders are returned when cost_cb is None"""
+
+    # Create temporary experiment file with trace_id
+    experiment_file = tmp_path / "experiment.jsonl"
+    test_data = [{"trace_id": "trace1"}]
+    with open(experiment_file, "w") as f:
+        for item in test_data:
+            f.write(json.dumps(item) + "\n")
 
     # Create mock result
     class MockTokenUsage:
@@ -140,12 +169,60 @@ def test_token_usage_placeholders():
 
     mock_result = MockResult()
 
-    formatted = format_evaluation_scores(mock_result, 5.0 / 1e6, 15.0 / 1e6)
+    formatted = format_evaluation_scores(mock_result, 5.0 / 1e6, 15.0 / 1e6, str(experiment_file))
 
     # Verify placeholder token usage is returned (0 when cost_cb is None)
     assert formatted.total_tokens["input_tokens"] == 0
     assert formatted.total_tokens["output_tokens"] == 0
     assert formatted.total_cost == 0.0
+
+
+def test_trace_id_preservation(tmp_path):
+    """Test that trace_ids from experiment file are preserved in individual_results"""
+
+    # Create temporary experiment file with trace_ids
+    experiment_file = tmp_path / "experiment.jsonl"
+    test_data = [
+        {"trace_id": "a1b2c3d4e5f6789012345678901234ab"},
+        {"trace_id": "b2c3d4e5f6789012345678901234abc2"},
+        {"trace_id": "c3d4e5f6789012345678901234abc34"},
+    ]
+    with open(experiment_file, "w") as f:
+        for item in test_data:
+            f.write(json.dumps(item) + "\n")
+
+    # Create mock result
+    class MockResult:
+        _repr_dict = {"faithfulness": 0.85}
+        cost_cb = None
+
+        def to_pandas(self):
+            return pd.DataFrame(
+                {
+                    "user_input": ["Q1", "Q2", "Q3"],
+                    "faithfulness": [0.9, 0.8, 0.85],
+                }
+            )
+
+        def total_tokens(self):
+            class MockTokenUsage:
+                input_tokens = 100
+                output_tokens = 50
+
+            return MockTokenUsage()
+
+        def total_cost(self, **kwargs):
+            return 0.001
+
+    mock_result = MockResult()
+
+    formatted = format_evaluation_scores(mock_result, 5.0 / 1e6, 15.0 / 1e6, str(experiment_file))
+
+    # Verify trace_ids are preserved in individual results
+    assert len(formatted.individual_results) == 3
+    assert formatted.individual_results[0]["trace_id"] == "a1b2c3d4e5f6789012345678901234ab"
+    assert formatted.individual_results[1]["trace_id"] == "b2c3d4e5f6789012345678901234abc2"
+    assert formatted.individual_results[2]["trace_id"] == "c3d4e5f6789012345678901234abc34"
 
 
 # TestMain tests
