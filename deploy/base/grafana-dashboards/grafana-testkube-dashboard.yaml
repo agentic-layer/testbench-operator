@@ -10,16 +10,6 @@ data:
   # Grafana provisioning will automatically pick up JSON files in the mounted path.
   testkube-dashboard.json: |
     {
-      "__inputs": [
-        {
-          "name": "DS_GRAFANACLOUD-KUBESHOP-PROM",
-          "label": "grafanacloud-kubeshop-prom",
-          "description": "",
-          "type": "datasource",
-          "pluginId": "prometheus",
-          "pluginName": "Prometheus"
-        }
-      ],
       "__requires": [
         {
           "type": "grafana",
@@ -72,7 +62,7 @@ data:
       "links": [],
       "panels": [
         {
-          "datasource": "${DS_GRAFANACLOUD-KUBESHOP-PROM}",
+          "datasource": {"type": "prometheus"},
           "description": "Executions distributions",
           "fieldConfig": {
             "defaults": {
@@ -144,7 +134,7 @@ data:
           "targets": [
             {
               "exemplar": true,
-              "expr": "testkube_test_executions_count{result=\"passed\"}",
+              "expr": "testkube_testworkflow_executions_count_total{result=\"passed\"}",
               "hide": false,
               "instant": false,
               "interval": "1",
@@ -156,12 +146,12 @@ data:
               "refId": "B"
             }
           ],
-          "title": "SUCCESSFUL test executions",
+          "title": "SUCCESSFUL workflow executions",
           "transparent": true,
           "type": "timeseries"
         },
         {
-          "datasource": "${DS_GRAFANACLOUD-KUBESHOP-PROM}",
+          "datasource": {"type": "prometheus"},
           "description": "Executions distributions",
           "fieldConfig": {
             "defaults": {
@@ -233,7 +223,7 @@ data:
           "targets": [
             {
               "exemplar": true,
-              "expr": "testkube_test_executions_count{result=\"failed\"}",
+              "expr": "testkube_testworkflow_executions_count_total{result=\"failed\"}",
               "hide": false,
               "instant": false,
               "interval": "1",
@@ -245,12 +235,12 @@ data:
               "refId": "B"
             }
           ],
-          "title": "FAILED test executions",
+          "title": "FAILED workflow executions",
           "transparent": true,
           "type": "timeseries"
         },
         {
-          "datasource": "${DS_GRAFANACLOUD-KUBESHOP-PROM}",
+          "datasource": {"type": "prometheus"},
           "description": "Executions distributions",
           "fieldConfig": {
             "defaults": {
@@ -300,7 +290,7 @@ data:
           "targets": [
             {
               "exemplar": true,
-              "expr": "testkube_test_creations_count{}",
+              "expr": "testkube_testworkflow_executions_count_total{}",
               "format": "table",
               "hide": false,
               "instant": false,
@@ -314,7 +304,7 @@ data:
               "refId": "B"
             }
           ],
-          "title": "Test creations",
+          "title": "Total workflow executions",
           "transparent": true,
           "type": "stat"
         }
