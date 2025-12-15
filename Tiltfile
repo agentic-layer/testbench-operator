@@ -1,7 +1,7 @@
 # -*- mode: Python -*-
 
-# Increase Kubernetes upsert timeout for CRD installations
-update_settings(max_parallel_updates=10)
+# Increase Kubernetes upsert timeout for CRD installations and slow Helm charts (testkube)
+update_settings(max_parallel_updates=10, k8s_upsert_timeout_secs=600)
 
 # Load .env file for environment variables
 load('ext://dotenv', 'dotenv')
