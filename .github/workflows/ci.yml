@@ -122,8 +122,12 @@ jobs:
               echo "Tilt CI failed after 5 attempts, exiting."
               exit 1
             fi
-            echo "Tilt CI failed, retrying... ($i/3)"
-            # Wait a bit for resource to stabilize / cleanup
+            echo "Tilt CI failed, retrying... ($i/4)"
+
+            # Clean up stuck Helm releases before retrying
+            helm rollback testkube -n testkube 2>/dev/null || helm uninstall testkube -n testkube 2>/dev/null || true
+
+            # Wait a bit for resources to stabilize
             sleep 10
           done
 
