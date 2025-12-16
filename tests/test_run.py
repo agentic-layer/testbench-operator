@@ -96,7 +96,7 @@ async def test_run_agent_experiment_success(monkeypatch):
         async def __aexit__(self, exc_type, exc_val, exc_tb):
             pass
 
-    def mock_httpx_client():
+    def mock_httpx_client(**kwargs):
         return MockAsyncClient()
 
     monkeypatch.setattr("run.initialize_client", mock_init_client)
@@ -111,9 +111,7 @@ async def test_run_agent_experiment_success(monkeypatch):
 
     # Call the function
     result = await run_agent_experiment.func(
-        test_row,
-        agent_url="http://test-agent:8000",
-        workflow_name="test-workflow"
+        test_row, agent_url="http://test-agent:8000", workflow_name="test-workflow"
     )
 
     # Verify result structure
@@ -141,7 +139,7 @@ async def test_run_agent_experiment_error(monkeypatch):
         async def __aexit__(self, exc_type, exc_val, exc_tb):
             pass
 
-    def mock_httpx_client():
+    def mock_httpx_client(**kwargs):
         return MockAsyncClient()
 
     monkeypatch.setattr("run.initialize_client", mock_init_client)
@@ -156,9 +154,7 @@ async def test_run_agent_experiment_error(monkeypatch):
 
     # Call the function
     result = await run_agent_experiment.func(
-        test_row,
-        agent_url="http://test-agent:8000",
-        workflow_name="test-workflow"
+        test_row, agent_url="http://test-agent:8000", workflow_name="test-workflow"
     )
 
     # Verify error is captured in response
@@ -210,7 +206,7 @@ async def test_main_execution(temp_dir, monkeypatch):
         monkeypatch.setattr("run.run_agent_experiment.arun", mock_arun_tracked)
 
         # Run main
-        await main("http://test-agent:8000", "test-workflow")
+        await main("http://test-agent:8000", "test-workflow", 300)
 
         # Verify Dataset.load was called
         assert len(calls_to_load) == 1

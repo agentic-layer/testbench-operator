@@ -16,10 +16,9 @@ from a2a.types import (
 )
 from opentelemetry import trace
 from opentelemetry.trace import Status, StatusCode
+from otel_setup import setup_otel
 from pydantic import BaseModel
 from ragas import Dataset, experiment
-
-from otel_setup import setup_otel
 
 # Set up module-level logger
 logging.basicConfig(level=logging.INFO)
@@ -43,7 +42,7 @@ async def initialize_client(agent_url: str) -> Client:
 
 
 @experiment()
-async def run_agent_experiment(row, agent_url: str, workflow_name: str) -> dict[str, str | list]:
+async def run_agent_experiment(row, agent_url: str, workflow_name: str, timeout: int = 300) -> dict[str, str | list]:
     """
     Experiment function that processes each row from the dataset.
 
@@ -51,6 +50,7 @@ async def run_agent_experiment(row, agent_url: str, workflow_name: str) -> dict[
         row: A dictionary containing 'user_input', 'retrieved_contexts', and 'reference' fields
         agent_url: The URL of the agent to query
         workflow_name: Name of the test workflow for span labeling
+        timeout: Request timeout in seconds (default: 300)
 
     Returns:
         Dictionary with original row data plus 'response' and 'trace_id'
@@ -76,7 +76,7 @@ async def run_agent_experiment(row, agent_url: str, workflow_name: str) -> dict[
         span.set_attribute("workflow.name", workflow_name)
 
         try:
-            async with httpx.AsyncClient():
+            async with httpx.AsyncClient(timeout=httpx.Timeout(timeout)):
                 client = await initialize_client(agent_url)
 
                 # Get the input from the row
@@ -126,7 +126,7 @@ async def run_agent_experiment(row, agent_url: str, workflow_name: str) -> dict[
         return result
 
 
-async def main(agent_url: str, workflow_name: str) -> None:
+async def main(agent_url: str, workflow_name: str, timeout: int) -> None:
     """Main function to load Ragas Dataset and run Experiment."""
 
     # Initialize OpenTelemetry tracing
@@ -139,7 +139,9 @@ async def main(agent_url: str, workflow_name: str) -> None:
 
     # Run the experiment
     logger.info("Starting experiment...")
-    await run_agent_experiment.arun(dataset, name="ragas_experiment", agent_url=agent_url, workflow_name=workflow_name)
+    await run_agent_experiment.arun(
+        dataset, name="ragas_experiment", agent_url=agent_url, workflow_name=workflow_name, timeout=timeout
+    )
 
     logger.info("Experiment completed successfully")
     logger.info("Results saved to data/experiments/ragas_experiment.jsonl")
@@ -157,7 +159,13 @@ if __name__ == "__main__":
         default="local-test",
         help="Name of the test workflow (e.g., 'weather-assistant-test'). Default: 'local-test'",
     )
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=300.0,
+        help="Request timeout in seconds (default: 300)",
+    )
     args = parser.parse_args()
 
     # Call main with parsed arguments
-    asyncio.run(main(args.url, args.workflow_name))
+    asyncio.run(main(args.url, args.workflow_name, args.timeout))
