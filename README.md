@@ -132,7 +132,6 @@ kubectl testkube run testworkflow ragas-evaluation-workflow \
     --config datasetUrl="http://data-server.data-server:8000/dataset.csv" \
     --config agentUrl="http://agent-gateway-krakend.agent-gateway-krakend:10000/weather-agent" \
     --config metrics="nv_accuracy context_recall" \
-    --config workflowName="Testworkflow-Name" \
     --config image="ghcr.io/agentic-layer/testbench/testworkflows:latest" \
     -n testkube
 ```
@@ -144,7 +143,6 @@ kubectl testkube run testworkflow ragas-evaluation-workflow \
     --config datasetUrl="http://data-server.data-server:8000/dataset.csv" \
     --config agentUrl="http://agent-gateway-krakend.agent-gateway-krakend:10000/weather-agent" \
     --config metrics="nv_accuracy context_recall" \
-    --config workflowName="Testworkflow-Name" \
     --config image="ghcr.io/agentic-layer/testbench/testworkflows:latest" \
     --config model="gemini/gemini-2.5-flash" \
     --config otlpEndpoint="http://otlp-endpoint:4093" \

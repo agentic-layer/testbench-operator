@@ -136,7 +136,6 @@ jobs:
               --config datasetUrl="http://data-server.data-server:8000/dataset.csv" \
               --config agentUrl="http://agent-gateway-krakend.agent-gateway-krakend:10000/weather-agent" \
               --config metrics="nv_accuracy context_recall" \
-              --config workflowName="Testworkflow-Name" \
               --config image="${{ steps.extract-tag.outputs.image-tag }}" \
               -n testkube \
               --watch

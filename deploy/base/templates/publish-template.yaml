@@ -9,9 +9,6 @@ metadata:
 spec:
   # Configuration parameters that can be overridden
   config:
-    workflowName:
-      type: string
-      description: "Name of the test workflow (used as label)"
     otlpEndpoint:
       type: string
       description: "URL of the OTLP endpoint"
@@ -27,5 +24,5 @@ spec:
       run:
         args:
           - publish.py
-          - "{{ config.workflowName }}"
+          - "{{ workflow.name }}"
           - "{{ config.otlpEndpoint }}"
