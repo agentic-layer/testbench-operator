@@ -25,4 +25,5 @@ spec:
         args:
           - publish.py
           - "{{ workflow.name }}"
+          - "{{ execution.id }}"
           - "{{ config.otlpEndpoint }}"

@@ -175,7 +175,7 @@ uv run python3 scripts/run.py "http://localhost:11010"
 uv run python3 scripts/evaluate.py gemini-2.5-flash-lite faithfulness answer_relevancy
 
 # 4. Publish metrics to OpenTelemetry
-uv run python3 scripts/publish.py "my-agent-evaluation"
+uv run python3 scripts/publish.py "my-agent-evaluation" "local-exec-001"
 ```
 
 ----

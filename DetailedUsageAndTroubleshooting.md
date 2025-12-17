@@ -164,12 +164,13 @@ Publishes evaluation metrics to an OpenTelemetry OTLP endpoint for monitoring.
 **Syntax:**
 
 ```shell
-python3 scripts/publish.py <workflow_name> [otlp_endpoint]
+python3 scripts/publish.py <workflow_name> <execution_id> [otlp_endpoint]
 ```
 
 **Arguments:**
 
 - `workflow_name` (required): Name of the test workflow (used as metric label)
+- `execution_id` (required): Testkube execution ID for this workflow run
 - `otlp_endpoint` (optional): OTLP HTTP endpoint URL (default: `localhost:4318`)
 
 **Input:**
@@ -178,17 +179,29 @@ python3 scripts/publish.py <workflow_name> [otlp_endpoint]
 
 **Published Metrics:**
 
-Each RAGAS metric is published as a gauge with the workflow name as an attribute:
+Three gauge types are published to the OTLP endpoint:
+
+| Gauge Name | Description | Attributes |
+|------------|-------------|------------|
+| `testbench_evaluation_metric` | Per-sample evaluation scores | `name`, `workflow_name`, `execution_id`, `trace_id` |
+| `testbench_evaluation_token_usage` | Token counts from evaluation | `type` (input_tokens/output_tokens), `workflow_name`, `execution_id` |
+| `testbench_evaluation_cost` | Total evaluation cost in USD | `workflow_name`, `execution_id` |
+
+**Example output:**
 
 ```
-ragas_evaluation_faithfulness{workflow_name="weather-assistant-eval"} = 0.85
-ragas_evaluation_answer_relevancy{workflow_name="weather-assistant-eval"} = 0.92
+testbench_evaluation_metric{name="faithfulness", workflow_name="weather-eval", execution_id="exec-123", trace_id="abc123..."} = 0.85
+testbench_evaluation_metric{name="context_recall", workflow_name="weather-eval", execution_id="exec-123", trace_id="abc123..."} = 1.0
+testbench_evaluation_token_usage{type="input_tokens", workflow_name="weather-eval", execution_id="exec-123"} = 1500
+testbench_evaluation_token_usage{type="output_tokens", workflow_name="weather-eval", execution_id="exec-123"} = 500
+testbench_evaluation_cost{workflow_name="weather-eval", execution_id="exec-123"} = 0.015
 ```
 
 **Notes:**
 
 - Sends metrics to `/v1/metrics` endpoint
 - Uses resource with `service.name="ragas-evaluation"`
+- The `trace_id` attribute links metrics to distributed traces for debugging
 - Forces flush to ensure delivery before exit
 
 
