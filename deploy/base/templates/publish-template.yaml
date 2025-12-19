@@ -26,4 +26,5 @@ spec:
           - publish.py
           - "{{ workflow.name }}"
           - "{{ execution.id }}"
+          - "{{ execution.number }}"
           - "{{ config.otlpEndpoint }}"
