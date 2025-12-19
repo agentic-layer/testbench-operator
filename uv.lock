@@ -548,30 +548,6 @@ http = [
 ]
 
 [[package]]
-name = "gitdb"
-version = "4.0.12"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "smmap" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/72/94/63b0fc47eb32792c7ba1fe1b694daec9a63620db1e313033d18140c2320a/gitdb-4.0.12.tar.gz", hash = "sha256:5ef71f855d191a3326fcfbc0d5da835f26b13fbcba60c32c21091c349ffdb571", size = 394684, upload-time = "2025-01-02T07:20:46.413Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/a0/61/5c78b91c3143ed5c14207f463aecfc8f9dbb5092fb2869baf37c273b2705/gitdb-4.0.12-py3-none-any.whl", hash = "sha256:67073e15955400952c6565cc3e707c554a4eea2e428946f7a4c162fab9bd9bcf", size = 62794, upload-time = "2025-01-02T07:20:43.624Z" },
-]
-
-[[package]]
-name = "gitpython"
-version = "3.1.45"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "gitdb" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/9a/c8/dd58967d119baab745caec2f9d853297cec1989ec1d63f677d3880632b88/gitpython-3.1.45.tar.gz", hash = "sha256:85b0ee964ceddf211c41b9f27a49086010a190fd8132a24e21f362a4b36a791c", size = 215076, upload-time = "2025-07-24T03:45:54.871Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/01/61/d4b89fec821f72385526e1b9d9a3a0385dda4a72b206d28049e2c7cd39b8/gitpython-3.1.45-py3-none-any.whl", hash = "sha256:8908cb2e02fb3b93b7eb0f2827125cb699869470432cc885f019b8fd0fccff77", size = 208168, upload-time = "2025-07-24T03:45:52.517Z" },
-]
-
-[[package]]
 name = "google-api-core"
 version = "2.28.1"
 source = { registry = "https://pypi.org/simple" }
@@ -2303,13 +2279,12 @@ wheels = [
 
 [[package]]
 name = "ragas"
-version = "0.3.5"
+version = "0.4.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "appdirs" },
     { name = "datasets" },
     { name = "diskcache" },
-    { name = "gitpython" },
     { name = "instructor" },
     { name = "langchain" },
     { name = "langchain-community" },
@@ -2327,9 +2302,9 @@ dependencies = [
     { name = "tqdm" },
     { name = "typer" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/2f/40/c342893abd6f73eb2b20a562e1560cc87f18b8316a12288f03642febab24/ragas-0.3.5.tar.gz", hash = "sha256:164d5c0a96048d9c9373aa3e9123f0096649abbd2b58e747c2f0a454da6c2d6b", size = 43027900, upload-time = "2025-09-17T19:13:52.766Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ee/e2/1066235befe0b9ea1921ca84b6dd8a9f35f74c10a23a56a4a82ce1e9f240/ragas-0.4.1.tar.gz", hash = "sha256:eda2603269c5c8021166ef56328b68ed88af15c4205a3e31b759233fd7ffc720", size = 43940590, upload-time = "2025-12-10T16:29:25.13Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/75/4c/56338824441cefe5bab2b47350805f9fbf5ec85de78645452da461c9c174/ragas-0.3.5-py3-none-any.whl", hash = "sha256:3e917b12dc90ef692776263f66d220df40ff0573d2a96c8868198629f8b35206", size = 284321, upload-time = "2025-09-17T19:13:50.065Z" },
+    { url = "https://files.pythonhosted.org/packages/a7/fb/51dbc01f6ec3dc79257f9347fdf0bcc46a63fe016e279128cad911267e3a/ragas-0.4.1-py3-none-any.whl", hash = "sha256:afcf36542087d0e0ef5898d7da04f20fb69eb215c326529a5c4b3d54a1fe4305", size = 419897, upload-time = "2025-12-10T16:29:21.873Z" },
 ]
 
 [[package]]
@@ -2655,15 +2630,6 @@ wheels = [
 ]
 
 [[package]]
-name = "smmap"
-version = "5.0.2"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/44/cd/a040c4b3119bbe532e5b0732286f805445375489fceaec1f48306068ee3b/smmap-5.0.2.tar.gz", hash = "sha256:26ea65a03958fa0c8a1c7e8c7a58fdc77221b8910f6be2131affade476898ad5", size = 22329, upload-time = "2025-01-02T07:14:40.909Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/04/be/d09147ad1ec7934636ad912901c5fd7667e1c858e19d355237db0d0cd5e4/smmap-5.0.2-py3-none-any.whl", hash = "sha256:b30115f0def7d7531d22a0fb6502488d879e75b260a9db4d0819cfb25403af5e", size = 24303, upload-time = "2025-01-02T07:14:38.724Z" },
-]
-
-[[package]]
 name = "sniffio"
 version = "1.3.1"
 source = { registry = "https://pypi.org/simple" }
@@ -2737,6 +2703,7 @@ dependencies = [
     { name = "a2a-sdk" },
     { name = "httpx" },
     { name = "langchain-openai" },
+    { name = "nest-asyncio" },
     { name = "opentelemetry-api" },
     { name = "opentelemetry-exporter-otlp-proto-http" },
     { name = "opentelemetry-instrumentation-httpx" },
@@ -2744,6 +2711,7 @@ dependencies = [
     { name = "pandas" },
     { name = "pandas-stubs" },
     { name = "pyarrow" },
+    { name = "python-dotenv" },
     { name = "ragas" },
     { name = "requests" },
     { name = "types-requests" },
@@ -2766,6 +2734,7 @@ requires-dist = [
     { name = "a2a-sdk", specifier = ">=0.3.10" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "langchain-openai", specifier = ">=1.0.2" },
+    { name = "nest-asyncio", specifier = ">=1.6.0" },
     { name = "opentelemetry-api", specifier = ">=1.20.0" },
     { name = "opentelemetry-exporter-otlp-proto-http", specifier = ">=1.20.0" },
     { name = "opentelemetry-instrumentation-httpx", specifier = ">=0.45b0" },
@@ -2773,7 +2742,8 @@ requires-dist = [
     { name = "pandas", specifier = ">=2.3.3" },
     { name = "pandas-stubs", specifier = ">=2.3.0" },
     { name = "pyarrow", specifier = ">=21.0.0" },
-    { name = "ragas", specifier = ">=0.3.5" },
+    { name = "python-dotenv", specifier = ">=1.0.0" },
+    { name = "ragas", extras = ["ag-ui"], specifier = ">=0.4.1" },
     { name = "requests", specifier = ">=2.32.5" },
     { name = "types-requests", specifier = ">=2.32.0" },
 ]

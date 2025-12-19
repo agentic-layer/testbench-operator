@@ -1,0 +1,31 @@
+apiVersion: testworkflows.testkube.io/v1
+kind: TestWorkflow
+metadata:
+  name: multi-turn-workflow
+  namespace: testkube
+  labels:
+    testkube.io/test-category: ragas-evaluation
+    app: testworkflows
+
+spec:
+  container:
+    image: ghcr.io/agentic-layer/testbench/testworkflows:latest
+    env:
+      - name: OPENAI_API_BASE
+        value: "http://ai-gateway-litellm.ai-gateway:4000"
+
+  # Global configuration that applies to all steps
+  config:
+    # Dataset configuration
+    datasetUrl:
+      type: string
+      description: "URL to the dataset file"
+
+  # Steps using the templates
+  steps:
+    # Step 1: Setup - Download and convert dataset
+    - name: setup
+      use:
+        - name: ragas-setup-template
+          config:
+            datasetUrl: "{{ config.datasetUrl }}"

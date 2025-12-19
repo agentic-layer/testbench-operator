@@ -5,4 +5,4 @@ resources:
   - weather-agent.yaml
   - data-server/
   - ../base
-  - ragas-evaluation-workflow.yaml
+  - multi-turn-workflow.yaml
