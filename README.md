@@ -132,8 +132,8 @@ kubectl testkube run testworkflow ragas-evaluation-workflow \
     --config datasetUrl="http://data-server.data-server:8000/dataset.csv" \
     --config agentUrl="http://agent-gateway-krakend.agent-gateway-krakend:10000/weather-agent" \
     --config metrics="nv_accuracy context_recall" \
-    --config workflowName="Testworkflow-Name" \
     --config image="ghcr.io/agentic-layer/testbench/testworkflows:latest" \
+    --config otlpEndpoint="http://lgtm.monitoring:4318" \
     -n testkube
 ```
 
@@ -144,7 +144,6 @@ kubectl testkube run testworkflow ragas-evaluation-workflow \
     --config datasetUrl="http://data-server.data-server:8000/dataset.csv" \
     --config agentUrl="http://agent-gateway-krakend.agent-gateway-krakend:10000/weather-agent" \
     --config metrics="nv_accuracy context_recall" \
-    --config workflowName="Testworkflow-Name" \
     --config image="ghcr.io/agentic-layer/testbench/testworkflows:latest" \
     --config model="gemini/gemini-2.5-flash" \
     --config otlpEndpoint="http://otlp-endpoint:4093" \
@@ -176,8 +175,8 @@ uv run python3 scripts/run.py "http://localhost:11010"
 # 3. Evaluate responses with RAGAS metrics
 uv run python3 scripts/evaluate.py gemini-2.5-flash-lite faithfulness answer_relevancy
 
-# 4. Publish metrics to OpenTelemetry
-uv run python3 scripts/publish.py "my-agent-evaluation"
+# 4. Publish metrics to OpenTelemetry (workflow_name, execution_id, execution_number)
+uv run python3 scripts/publish.py "my-agent-evaluation" "local-exec-001" 1
 ```
 
 ----
@@ -276,6 +275,18 @@ uv run pytest tests_e2e/test_e2e.py -v
 ----
 
 ## Development
+
+### Deployment Structure
+
+```
+deploy/
+  base/                    # Shared resources for all environments
+    templates/             # Testkube TestWorkflowTemplates
+    grafana-dashboards/    # Dashboard ConfigMaps (auto-discovered via grafana_dashboard label)
+  local/                   # Local Tilt environment (uses LGTM all-in-one)
+  dev/                     # Dev cluster environment (uses Grafana sidecar for dashboard discovery)
+```
+
 
 ## Code Quality Standards
 

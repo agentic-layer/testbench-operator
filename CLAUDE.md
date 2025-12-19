@@ -75,7 +75,6 @@ kubectl testkube run testworkflow ragas-evaluation-workflow \
     --config datasetUrl="http://data-server.data-server:8000/dataset.csv" \
     --config agentUrl="http://weather-agent.sample-agents:8000" \
     --config metrics="nv_accuracy context_recall" \
-    --config workflowName="Test-Run" \
     -n testkube
 
 # Watch workflow execution
@@ -155,7 +154,6 @@ Observability Backend (Grafana)
 - `agentUrl` - A2A endpoint of agent to evaluate
 - `model` - LLM model for RAGAS evaluation (e.g., `gemini-2.5-flash-lite`)
 - `metrics` - Space-separated RAGAS metrics (e.g., `faithfulness context_recall`)
-- `workflowName` - Label for published metrics
 - `otlpEndpoint` - OpenTelemetry collector URL (default: `http://lgtm.monitoring:4318`)
 - `image` - Docker image to use (default: `ghcr.io/agentic-layer/testbench/testworkflows:latest`)
 

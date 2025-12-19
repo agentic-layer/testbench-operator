@@ -1,0 +1,6 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - lgtm.yaml
+  - lgtm-otel-scraping-config.yaml
+  - lgtm-grafana-dashboard-config.yaml

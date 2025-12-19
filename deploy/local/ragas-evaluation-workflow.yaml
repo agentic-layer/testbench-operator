@@ -49,15 +49,10 @@ spec:
       default: "nv_accuracy context_recall"
 
     # Publishing configuration
-    workflowName:
-      type: string
-      description: "Workflow name for metrics"
-      default: "ragas-test-workflow"
-
     otlpEndpoint:
       type: string
       description: "OTLP endpoint URL"
-      default: "http://lgtm.monitoring:4318"
+      default: "http://otel-collector.monitoring.svc.cluster.local:4318"
 
     # Docker image
     image:
@@ -97,6 +92,5 @@ spec:
       template:
         name: ragas-publish-template
         config:
-          workflowName: "{{ config.workflowName }}"
           otlpEndpoint: "{{ config.otlpEndpoint }}"
           image: "{{ config.image }}"

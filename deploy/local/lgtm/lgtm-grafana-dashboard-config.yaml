@@ -1,0 +1,20 @@
+# Grafana dashboard provisioning config.
+# This tells Grafana where to find dashboard JSON files and how to organize them.
+# Without this, Grafana won't scan any directories for dashboards.
+# Reference: https://grafana.com/docs/grafana/latest/administration/provisioning/#dashboards
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-provisioning
+  namespace: monitoring
+data:
+  testbench-dashboards.yaml: |
+    apiVersion: 1
+    providers:
+      - name: 'testbench-dashboards'
+        type: file
+        folder: 'Testbench'
+        disableDeletion: false
+        editable: true
+        options:
+          path: /etc/grafana/provisioning/dashboards/testbench-dashboards
