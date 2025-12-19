@@ -14,7 +14,14 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from run import initialize_client, main, run_agent_experiment
+from run import (
+    a2a_message_to_ragas,
+    initialize_client,
+    main,
+    multi_turn_experiment,
+    single_turn_experiment,
+    validate_multi_turn_input,
+)
 
 
 # Fixtures
@@ -64,9 +71,9 @@ async def test_initialize_client_creates_client(monkeypatch):
     assert result == mock_client
 
 
-# TestRunAgentExperiment tests
+# TestSingleTurnExperiment tests
 @pytest.mark.asyncio
-async def test_run_agent_experiment_success(monkeypatch):
+async def test_single_turn_experiment_success(monkeypatch):
     """Test successful agent query execution"""
 
     # Mock the client
@@ -110,7 +117,7 @@ async def test_run_agent_experiment_success(monkeypatch):
     }
 
     # Call the function
-    result = await run_agent_experiment.func(
+    result = await single_turn_experiment.func(
         test_row, agent_url="http://test-agent:8000", workflow_name="test-workflow"
     )
 
@@ -124,7 +131,7 @@ async def test_run_agent_experiment_success(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_run_agent_experiment_error(monkeypatch):
+async def test_single_turn_experiment_error(monkeypatch):
     """Test agent query with error handling"""
 
     # Mock client that raises an error
@@ -153,7 +160,7 @@ async def test_run_agent_experiment_error(monkeypatch):
     }
 
     # Call the function
-    result = await run_agent_experiment.func(
+    result = await single_turn_experiment.func(
         test_row, agent_url="http://test-agent:8000", workflow_name="test-workflow"
     )
 
@@ -176,6 +183,10 @@ async def test_main_execution(temp_dir, monkeypatch):
         class MockDataset:
             def __len__(self):
                 return 2
+
+            def __getitem__(self, index):
+                # Return single-turn format for detection
+                return {"user_input": "Test question", "retrieved_contexts": [], "reference": "Answer"}
 
         mock_dataset = MockDataset()
 
@@ -203,7 +214,7 @@ async def test_main_execution(temp_dir, monkeypatch):
             return mock_experiment
 
         monkeypatch.setattr("run.Dataset.load", mock_dataset_load_tracked)
-        monkeypatch.setattr("run.run_agent_experiment.arun", mock_arun_tracked)
+        monkeypatch.setattr("run.single_turn_experiment.arun", mock_arun_tracked)
 
         # Run main
         await main("http://test-agent:8000", "test-workflow")
@@ -216,5 +227,175 @@ async def test_main_execution(temp_dir, monkeypatch):
 
         # Verify workflow_name was passed through to arun
         assert calls_to_arun[0]["kwargs"]["workflow_name"] == "test-workflow"
+    finally:
+        os.chdir(original_cwd)
+
+
+# Test helper functions
+def test_a2a_message_to_ragas_human():
+    """Test conversion of A2A user message to RAGAS HumanMessage"""
+    from a2a.types import Message, Part, Role, TextPart
+
+    # Create A2A user message
+    a2a_msg = Message(
+        role=Role.user,
+        parts=[Part(TextPart(text="Hello, how are you?"))],
+        message_id="test123",
+    )
+
+    # Convert to RAGAS
+    ragas_msg = a2a_message_to_ragas(a2a_msg)
+
+    # Verify
+    from ragas.messages import HumanMessage
+
+    assert isinstance(ragas_msg, HumanMessage)
+    assert ragas_msg.content == "Hello, how are you?"
+
+
+def test_a2a_message_to_ragas_ai():
+    """Test conversion of A2A agent message to RAGAS AIMessage"""
+    from a2a.types import Message, Part, Role, TextPart
+
+    # Create A2A agent message
+    a2a_msg = Message(
+        role=Role.agent,
+        parts=[Part(TextPart(text="I'm doing well, thank you!"))],
+        message_id="test456",
+    )
+
+    # Convert to RAGAS
+    ragas_msg = a2a_message_to_ragas(a2a_msg)
+
+    # Verify
+    from ragas.messages import AIMessage
+
+    assert isinstance(ragas_msg, AIMessage)
+    assert ragas_msg.content == "I'm doing well, thank you!"
+    assert ragas_msg.tool_calls is None
+
+
+def test_a2a_message_to_ragas_with_tool_calls():
+    """Test tool call extraction from metadata"""
+    from a2a.types import Message, Part, Role, TextPart
+
+    # Create A2A agent message with tool calls in metadata
+    a2a_msg = Message(
+        role=Role.agent,
+        parts=[Part(TextPart(text="Let me check the weather"))],
+        message_id="test789",
+        metadata={"tool_calls": [{"name": "get_weather", "args": {"location": "NYC"}}]},
+    )
+
+    # Convert to RAGAS
+    ragas_msg = a2a_message_to_ragas(a2a_msg)
+
+    # Verify
+    from ragas.messages import AIMessage
+
+    assert isinstance(ragas_msg, AIMessage)
+    assert ragas_msg.content == "Let me check the weather"
+    assert ragas_msg.tool_calls is not None
+    assert len(ragas_msg.tool_calls) == 1
+    assert ragas_msg.tool_calls[0].name == "get_weather"
+    assert ragas_msg.tool_calls[0].args == {"location": "NYC"}
+
+
+def test_a2a_message_to_ragas_multi_part():
+    """Test text extraction from multiple parts"""
+    from a2a.types import Message, Part, Role, TextPart
+
+    # Create message with multiple text parts
+    a2a_msg = Message(
+        role=Role.agent,
+        parts=[Part(TextPart(text="Hello")), Part(TextPart(text="World"))],
+        message_id="test",
+    )
+
+    # Convert to RAGAS
+    ragas_msg = a2a_message_to_ragas(a2a_msg)
+
+    # Verify text parts are concatenated
+    from ragas.messages import AIMessage
+
+    assert isinstance(ragas_msg, AIMessage)
+    assert ragas_msg.content == "Hello World"
+
+
+def test_validate_multi_turn_input_success():
+    """Test validation with valid multi-turn input"""
+    user_input = [
+        {"content": "Hello", "type": "human"},
+        {"content": "Hi there!", "type": "ai"},
+        {"content": "How are you?", "type": "human"},
+    ]
+
+    result = validate_multi_turn_input(user_input)
+
+    assert result == user_input
+
+
+def test_validate_multi_turn_input_invalid_type():
+    """Test validation rejects non-list input"""
+    with pytest.raises(ValueError, match="must be list"):
+        validate_multi_turn_input("not a list")  # type: ignore
+
+
+def test_validate_multi_turn_input_missing_fields():
+    """Test validation catches missing content/type fields"""
+    # Missing content
+    with pytest.raises(ValueError, match="missing 'content' field"):
+        validate_multi_turn_input([{"type": "human"}])
+
+    # Missing type
+    with pytest.raises(ValueError, match="missing 'type' field"):
+        validate_multi_turn_input([{"content": "Hello"}])
+
+
+def test_validate_multi_turn_input_invalid_message_type():
+    """Test validation catches invalid message types"""
+    with pytest.raises(ValueError, match="has invalid type"):
+        validate_multi_turn_input([{"content": "Hello", "type": "invalid"}])
+
+
+@pytest.mark.asyncio
+async def test_main_detects_multi_turn(temp_dir, monkeypatch):
+    """Test main calls multi_turn_experiment for list user_input"""
+    tmp, original_cwd = temp_dir
+    os.chdir(tmp)
+
+    try:
+        # Create a mock dataset with multi-turn format
+        class MockDataset:
+            def __len__(self):
+                return 1
+
+            def __getitem__(self, index):
+                # Return multi-turn format for detection
+                return {
+                    "user_input": [{"content": "Hello", "type": "human"}],
+                    "reference": "Answer",
+                }
+
+        mock_dataset = MockDataset()
+
+        calls_to_multi_turn = []
+
+        async def mock_multi_turn_arun(*args, **kwargs):
+            calls_to_multi_turn.append({"args": args, "kwargs": kwargs})
+            return None
+
+        def mock_dataset_load(**kwargs):
+            return mock_dataset
+
+        monkeypatch.setattr("run.Dataset.load", mock_dataset_load)
+        monkeypatch.setattr("run.multi_turn_experiment.arun", mock_multi_turn_arun)
+
+        # Run main
+        await main("http://test-agent:8000", "test-workflow")
+
+        # Verify multi_turn_experiment was called
+        assert len(calls_to_multi_turn) == 1
+        assert calls_to_multi_turn[0]["kwargs"]["workflow_name"] == "test-workflow"
     finally:
         os.chdir(original_cwd)

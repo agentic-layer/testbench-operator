@@ -1,0 +1,1 @@
+{"user_input":[{"content":"What is the weather like in New York right now?","type":"human"},{"content":"The weather is 25 degrees.","type":"agent"},{"content":"What time is it in New York?","type":"human"},{"content":"It is 11:49.","type":"agent"}],"reference":null,"trace_id":"5ee59682c1477b74b568078d477ad62d"}

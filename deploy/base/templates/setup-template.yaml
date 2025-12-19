@@ -21,6 +21,9 @@ spec:
   # Steps to execute
   steps:
     - name: setup-dataset
+      artifacts:
+        paths:
+          - "data/datasets/ragas_dataset.jsonl"
       run:
         command:
           - sh

@@ -109,8 +109,10 @@ make run
 
 **Phase 2: Run** (`scripts/run.py`)
 - **Input**: `data/datasets/ragas_dataset.jsonl` + Agent URL
-- **Output**: `data/experiments/ragas_experiment.jsonl` (adds `response` field)
-- **Purpose**: Sends each `user_input` to agent via A2A protocol using `a2a-sdk`, records agent responses
+- **Output**: `data/experiments/ragas_experiment.jsonl` (adds `response` field for single-turn, full conversation for multi-turn)
+- **Purpose**: Sends queries to agent via A2A protocol using `a2a-sdk`, records agent responses
+- **Auto-Detection**: Detects single-turn vs multi-turn format and routes to appropriate experiment function
+- **Multi-Turn Support**: For conversational datasets, sequentially queries agent for each user message while maintaining context_id
 
 **Phase 3: Evaluate** (`scripts/evaluate.py`)
 - **Input**: `data/experiments/ragas_experiment.jsonl` + LLM model + metrics list
@@ -173,6 +175,22 @@ Observability Backend (Grafana)
 - **Client Library**: `a2a-sdk` Python package
 - **Usage in Testbench**: `run.py` uses `A2AClient` to send `user_input` prompts to agent's A2A endpoint
 - **Response Handling**: Agent responses stored in `response` field of experiment JSONL
+- **Context Management**: A2A `context_id` field maintains conversation state across multiple turns
+
+### Multi-Turn Conversation Support
+- **Purpose**: Evaluate agents in conversational scenarios with multiple back-and-forth exchanges
+- **Detection**: `run.py` automatically detects dataset type by inspecting `user_input` field type (string = single-turn, list = multi-turn)
+- **Experiment Functions**:
+  - `single_turn_experiment()`: Handles traditional question-answer format
+  - `multi_turn_experiment()`: Handles conversational interactions
+- **Sequential Query Strategy**: For each human message in the conversation:
+  1. Send message to agent via A2A protocol
+  2. Capture agent's response and extract `context_id`
+  3. Use `context_id` in subsequent messages to maintain conversation context
+  4. After final turn, extract full conversation history from `task.history`
+- **Data Format**: Multi-turn datasets use list of message dicts: `[{"content": "...", "type": "human"}, {"content": "...", "type": "ai"}, ...]`
+- **Tool Calls**: Extracts tool call information from A2A `message.metadata` if available
+- **Observability**: Creates parent span for conversation with child spans for each turn
 
 ### OpenTelemetry (OTLP)
 - **Purpose**: Standard protocol for publishing observability data

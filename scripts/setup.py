@@ -20,17 +20,13 @@ def dataframe_to_ragas_dataset(dataframe: DataFrame) -> None:
     - reference: The reference/ground truth answer
     """
 
-    # Set output directory (and create it if it doesn't exist already)
     output_dir = Path("data")
     output_dir.mkdir(exist_ok=True)
 
-    # Convert DataFrame to list of dictionaries
-    dataset_samples = cast(list[dict[str, Any]], dataframe.to_dict(orient="records"))
-
     # Create Ragas Dataset
-    dataset: Dataset[BaseModel] = Dataset(
+    dataset = Dataset.from_pandas(
         name="ragas_dataset",
-        data=dataset_samples,
+        dataframe=dataframe,
         backend="local/jsonl",
         root_dir="./data",
     )

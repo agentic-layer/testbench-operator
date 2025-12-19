@@ -18,7 +18,7 @@ spec:
     image:
       type: string
       description: "Docker image to use for the evaluate step"
-      default: "ghcr.io/agentic-layer/testbench/testworkflows:latest"
+      default: "ghcr.io/agentic-layer/testbench/testworkflows:0.1.1"
 
   # Steps to execute
   steps:
