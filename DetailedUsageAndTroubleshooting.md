@@ -164,13 +164,14 @@ Publishes evaluation metrics to an OpenTelemetry OTLP endpoint for monitoring.
 **Syntax:**
 
 ```shell
-python3 scripts/publish.py <workflow_name> <execution_id> [otlp_endpoint]
+python3 scripts/publish.py <workflow_name> <execution_id> <execution_number> [otlp_endpoint]
 ```
 
 **Arguments:**
 
 - `workflow_name` (required): Name of the test workflow (used as metric label)
 - `execution_id` (required): Testkube execution ID for this workflow run
+- `execution_number` (required): Numeric execution number for this workflow run (used as X-axis in Grafana)
 - `otlp_endpoint` (optional): OTLP HTTP endpoint URL (default: `localhost:4318`)
 
 **Input:**
@@ -183,18 +184,23 @@ Three gauge types are published to the OTLP endpoint:
 
 | Gauge Name | Description | Attributes |
 |------------|-------------|------------|
-| `testbench_evaluation_metric` | Per-sample evaluation scores | `name`, `workflow_name`, `execution_id`, `trace_id` |
-| `testbench_evaluation_token_usage` | Token counts from evaluation | `type` (input_tokens/output_tokens), `workflow_name`, `execution_id` |
-| `testbench_evaluation_cost` | Total evaluation cost in USD | `workflow_name`, `execution_id` |
+| `testbench_evaluation_metric` | Per-sample evaluation scores | `name`, `workflow_name`, `execution_id`, `execution_number`, `trace_id`, `user_input_hash`, `user_input_truncated` |
+| `testbench_evaluation_token_usage` | Token counts from evaluation | `type` (input_tokens/output_tokens), `workflow_name`, `execution_id`, `execution_number` |
+| `testbench_evaluation_cost` | Total evaluation cost in USD | `workflow_name`, `execution_id`, `execution_number` |
+
+**Attribute Details:**
+
+- `user_input_hash`: 12-character SHA256 hash of the user input for stable identification across executions
+- `user_input_truncated`: First 50 characters of the user input with "..." suffix (for display in Grafana legends)
 
 **Example output:**
 
 ```
-testbench_evaluation_metric{name="faithfulness", workflow_name="weather-eval", execution_id="exec-123", trace_id="abc123..."} = 0.85
-testbench_evaluation_metric{name="context_recall", workflow_name="weather-eval", execution_id="exec-123", trace_id="abc123..."} = 1.0
-testbench_evaluation_token_usage{type="input_tokens", workflow_name="weather-eval", execution_id="exec-123"} = 1500
-testbench_evaluation_token_usage{type="output_tokens", workflow_name="weather-eval", execution_id="exec-123"} = 500
-testbench_evaluation_cost{workflow_name="weather-eval", execution_id="exec-123"} = 0.015
+testbench_evaluation_metric{name="faithfulness", workflow_name="weather-eval", execution_id="exec-123", execution_number=1, trace_id="abc123...", user_input_hash="a1b2c3d4e5f6", user_input_truncated="What is the weather like in New York?"} = 0.85
+testbench_evaluation_metric{name="context_recall", workflow_name="weather-eval", execution_id="exec-123", execution_number=1, trace_id="abc123...", user_input_hash="a1b2c3d4e5f6", user_input_truncated="What is the weather like in New York?"} = 1.0
+testbench_evaluation_token_usage{type="input_tokens", workflow_name="weather-eval", execution_id="exec-123", execution_number=1} = 1500
+testbench_evaluation_token_usage{type="output_tokens", workflow_name="weather-eval", execution_id="exec-123", execution_number=1} = 500
+testbench_evaluation_cost{workflow_name="weather-eval", execution_id="exec-123", execution_number=1} = 0.015
 ```
 
 **Notes:**

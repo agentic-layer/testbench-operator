@@ -15,7 +15,15 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from publish import EvaluationData, _is_metric_value, create_and_push_metrics, load_evaluation_data, publish_metrics
+from publish import (
+    EvaluationData,
+    _get_user_input_hash,
+    _get_user_input_truncated,
+    _is_metric_value,
+    create_and_push_metrics,
+    load_evaluation_data,
+    publish_metrics,
+)
 
 
 # Mock classes for OpenTelemetry meter provider (used by HTTPXClientInstrumentor)
@@ -149,6 +157,55 @@ def test_is_metric_value_with_non_numeric():
     assert _is_metric_value(None) is False
 
 
+# Test _get_user_input_hash
+def test_get_user_input_hash_returns_12_char_hex():
+    """Test that _get_user_input_hash returns a 12-character hex string"""
+    result = _get_user_input_hash("What is the weather?")
+    assert len(result) == 12
+    assert all(c in "0123456789abcdef" for c in result)
+
+
+def test_get_user_input_hash_is_deterministic():
+    """Test that _get_user_input_hash returns the same hash for the same input"""
+    input_text = "What is the weather in New York?"
+    assert _get_user_input_hash(input_text) == _get_user_input_hash(input_text)
+
+
+def test_get_user_input_hash_different_for_different_inputs():
+    """Test that _get_user_input_hash returns different hashes for different inputs"""
+    hash1 = _get_user_input_hash("Question 1")
+    hash2 = _get_user_input_hash("Question 2")
+    assert hash1 != hash2
+
+
+# Test _get_user_input_truncated
+def test_get_user_input_truncated_short_input():
+    """Test that short inputs are returned unchanged"""
+    short_input = "Short question"
+    assert _get_user_input_truncated(short_input) == short_input
+
+
+def test_get_user_input_truncated_exact_length():
+    """Test that inputs exactly at max_length are returned unchanged"""
+    exact_input = "a" * 50
+    assert _get_user_input_truncated(exact_input) == exact_input
+
+
+def test_get_user_input_truncated_long_input():
+    """Test that long inputs are truncated with ellipsis"""
+    long_input = "a" * 100
+    result = _get_user_input_truncated(long_input)
+    assert len(result) == 53  # 50 chars + "..."
+    assert result.endswith("...")
+
+
+def test_get_user_input_truncated_custom_length():
+    """Test that custom max_length is respected"""
+    input_text = "This is a longer question"
+    result = _get_user_input_truncated(input_text, max_length=10)
+    assert result == "This is a ..."
+
+
 # Test load_evaluation_data
 def test_loads_evaluation_data(evaluation_scores_file):
     """Test that load_evaluation_data loads all required fields"""
@@ -226,6 +283,7 @@ def test_creates_gauges_for_each_metric(monkeypatch):
         evaluation_data=evaluation_data,
         workflow_name="test-workflow",
         execution_id="exec-test-123",
+        execution_number=42,
         otlp_endpoint="localhost:4318",
     )
 
@@ -240,11 +298,15 @@ def test_creates_gauges_for_each_metric(monkeypatch):
 
 
 def test_sets_per_sample_gauge_values(monkeypatch):
-    """Test that gauge values are set for each sample with execution_id and trace_id attributes"""
+    """Test that gauge values are set for each sample with all required attributes"""
     evaluation_data = EvaluationData(
         individual_results=[
             {"user_input": "Question 1", "faithfulness": 0.85, "trace_id": "d4e5f6a7b8c9012345678901234567dd"},
-            {"user_input": "Question 2", "faithfulness": 0.80, "trace_id": "e5f6a7b8c9d0123456789012345678ee"},
+            {
+                "user_input": "This is a very long question that exceeds fifty characters in length",
+                "faithfulness": 0.80,
+                "trace_id": "e5f6a7b8c9d0123456789012345678ee",
+            },
         ],
         total_tokens={"input_tokens": 0, "output_tokens": 0},
         total_cost=0.0,
@@ -300,6 +362,7 @@ def test_sets_per_sample_gauge_values(monkeypatch):
         evaluation_data=evaluation_data,
         workflow_name="test-workflow",
         execution_id="exec-test-123",
+        execution_number=42,
         otlp_endpoint="localhost:4318",
     )
 
@@ -311,15 +374,24 @@ def test_sets_per_sample_gauge_values(monkeypatch):
     ]
     assert len(faithfulness_calls) == 2
 
-    # Verify gauge.set was called with correct values, execution_id, and trace_id attributes
+    # Verify gauge.set was called with correct values and all required attributes
+    # First sample: short question
     assert faithfulness_calls[0]["value"] == 0.85
     assert faithfulness_calls[0]["attributes"]["workflow_name"] == "test-workflow"
     assert faithfulness_calls[0]["attributes"]["execution_id"] == "exec-test-123"
+    assert faithfulness_calls[0]["attributes"]["execution_number"] == 42
     assert faithfulness_calls[0]["attributes"]["trace_id"] == "d4e5f6a7b8c9012345678901234567dd"
+    assert faithfulness_calls[0]["attributes"]["user_input_hash"] == _get_user_input_hash("Question 1")
+    assert faithfulness_calls[0]["attributes"]["user_input_truncated"] == "Question 1"
 
+    # Second sample: long question (should be truncated)
+    long_question = "This is a very long question that exceeds fifty characters in length"
     assert faithfulness_calls[1]["value"] == 0.80
     assert faithfulness_calls[1]["attributes"]["execution_id"] == "exec-test-123"
+    assert faithfulness_calls[1]["attributes"]["execution_number"] == 42
     assert faithfulness_calls[1]["attributes"]["trace_id"] == "e5f6a7b8c9d0123456789012345678ee"
+    assert faithfulness_calls[1]["attributes"]["user_input_hash"] == _get_user_input_hash(long_question)
+    assert faithfulness_calls[1]["attributes"]["user_input_truncated"] == _get_user_input_truncated(long_question)
 
 
 def test_pushes_via_otlp(monkeypatch):
@@ -377,6 +449,7 @@ def test_pushes_via_otlp(monkeypatch):
         evaluation_data=evaluation_data,
         workflow_name="test-workflow",
         execution_id="exec-test-123",
+        execution_number=42,
         otlp_endpoint="localhost:4318",
     )
 
@@ -430,6 +503,7 @@ def test_handles_push_error(monkeypatch):
             evaluation_data=evaluation_data,
             workflow_name="test-workflow",
             execution_id="exec-test-123",
+            execution_number=42,
             otlp_endpoint="localhost:4318",
         )
 
@@ -442,12 +516,13 @@ def test_publish_metrics_calls_create_and_push(evaluation_scores_file, monkeypat
     """Test that publish_metrics calls create_and_push_metrics"""
     create_push_calls = []
 
-    def mock_create_push(evaluation_data, workflow_name, execution_id, otlp_endpoint):
+    def mock_create_push(evaluation_data, workflow_name, execution_id, execution_number, otlp_endpoint):
         create_push_calls.append(
             {
                 "evaluation_data": evaluation_data,
                 "workflow_name": workflow_name,
                 "execution_id": execution_id,
+                "execution_number": execution_number,
                 "otlp_endpoint": otlp_endpoint,
             }
         )
@@ -458,6 +533,7 @@ def test_publish_metrics_calls_create_and_push(evaluation_scores_file, monkeypat
         input_file=str(evaluation_scores_file),
         workflow_name="test-workflow",
         execution_id="exec-test-123",
+        execution_number=42,
         otlp_endpoint="localhost:4318",
     )
 
@@ -468,6 +544,7 @@ def test_publish_metrics_calls_create_and_push(evaluation_scores_file, monkeypat
     assert len(create_push_calls[0]["evaluation_data"].individual_results) == 2
     assert create_push_calls[0]["workflow_name"] == "test-workflow"
     assert create_push_calls[0]["execution_id"] == "exec-test-123"
+    assert create_push_calls[0]["execution_number"] == 42
     assert create_push_calls[0]["otlp_endpoint"] == "localhost:4318"
 
 
@@ -487,7 +564,7 @@ def test_publish_metrics_with_empty_results(temp_dir, monkeypatch):
 
     create_push_calls = []
 
-    def mock_create_push(evaluation_data, workflow_name, execution_id, otlp_endpoint):
+    def mock_create_push(evaluation_data, workflow_name, execution_id, execution_number, otlp_endpoint):
         create_push_calls.append(True)
 
     monkeypatch.setattr("publish.create_and_push_metrics", mock_create_push)
@@ -496,6 +573,7 @@ def test_publish_metrics_with_empty_results(temp_dir, monkeypatch):
         input_file=str(empty_file),
         workflow_name="test-workflow",
         execution_id="exec-test-123",
+        execution_number=42,
         otlp_endpoint="localhost:4318",
     )
 
@@ -557,6 +635,7 @@ def test_publish_realistic_scores(realistic_scores_file, monkeypatch):
         input_file=str(realistic_scores_file),
         workflow_name="weather-assistant-test",
         execution_id="exec-weather-456",
+        execution_number=42,
         otlp_endpoint="localhost:4318",
     )
 

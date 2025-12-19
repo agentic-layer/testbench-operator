@@ -133,6 +133,7 @@ kubectl testkube run testworkflow ragas-evaluation-workflow \
     --config agentUrl="http://agent-gateway-krakend.agent-gateway-krakend:10000/weather-agent" \
     --config metrics="nv_accuracy context_recall" \
     --config image="ghcr.io/agentic-layer/testbench/testworkflows:latest" \
+    --config otlpEndpoint="http://lgtm.monitoring:4318" \
     -n testkube
 ```
 
@@ -174,8 +175,8 @@ uv run python3 scripts/run.py "http://localhost:11010"
 # 3. Evaluate responses with RAGAS metrics
 uv run python3 scripts/evaluate.py gemini-2.5-flash-lite faithfulness answer_relevancy
 
-# 4. Publish metrics to OpenTelemetry
-uv run python3 scripts/publish.py "my-agent-evaluation" "local-exec-001"
+# 4. Publish metrics to OpenTelemetry (workflow_name, execution_id, execution_number)
+uv run python3 scripts/publish.py "my-agent-evaluation" "local-exec-001" 1
 ```
 
 ----

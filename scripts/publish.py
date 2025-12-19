@@ -1,4 +1,5 @@
 import argparse
+import hashlib
 import json
 import logging
 import math
@@ -46,8 +47,20 @@ def _is_metric_value(value: Any) -> TypeGuard[int | float]:
     return True
 
 
+def _get_user_input_hash(user_input: str) -> str:
+    """Generate a short hash of the user input for stable identification."""
+    return hashlib.sha256(user_input.encode()).hexdigest()[:12]
+
+
+def _get_user_input_truncated(user_input: str, max_length: int = 50) -> str:
+    """Truncate user input text for display in metric labels."""
+    if len(user_input) <= max_length:
+        return user_input
+    return user_input[:max_length] + "..."
+
+
 def create_and_push_metrics(
-    evaluation_data: EvaluationData, workflow_name: str, execution_id: str, otlp_endpoint: str
+    evaluation_data: EvaluationData, workflow_name: str, execution_id: str, execution_number: int, otlp_endpoint: str
 ) -> None:
     """
     Create OpenTelemetry metrics for evaluation results and push via OTLP.
@@ -98,11 +111,15 @@ def create_and_push_metrics(
                 if not trace_id:
                     logger.warning(f"Missing trace_id for sample in execution {execution_id}")
                     trace_id = "missing-trace-id"
+                user_input = result.get("user_input", "(user_input missing or invalid)")
                 attributes = {
                     "name": metric_name,
                     "workflow_name": workflow_name,
                     "execution_id": execution_id,
+                    "execution_number": execution_number,
                     "trace_id": trace_id,
+                    "user_input_hash": _get_user_input_hash(user_input),
+                    "user_input_truncated": _get_user_input_truncated(user_input),
                 }
                 metric_gauge.set(score, attributes)
                 logger.info(f"testbench_evaluation_metric{attributes} = {score}")
@@ -116,18 +133,30 @@ def create_and_push_metrics(
 
         input_tokens = evaluation_data.total_tokens.get("input_tokens", 0)
         token_gauge.set(
-            input_tokens, {"type": "input_tokens", "workflow_name": workflow_name, "execution_id": execution_id}
+            input_tokens,
+            {
+                "type": "input_tokens",
+                "workflow_name": workflow_name,
+                "execution_id": execution_id,
+                "execution_number": execution_number,
+            },
         )
         logger.info(
-            f"testbench_evaluation_token_usage{{type=input_tokens, workflow_name={workflow_name}, execution_id={execution_id}}} = {input_tokens}"
+            f"testbench_evaluation_token_usage{{type=input_tokens, workflow_name={workflow_name}, execution_id={execution_id}, execution_number={execution_number}}} = {input_tokens}"
         )
 
         output_tokens = evaluation_data.total_tokens.get("output_tokens", 0)
         token_gauge.set(
-            output_tokens, {"type": "output_tokens", "workflow_name": workflow_name, "execution_id": execution_id}
+            output_tokens,
+            {
+                "type": "output_tokens",
+                "workflow_name": workflow_name,
+                "execution_id": execution_id,
+                "execution_number": execution_number,
+            },
         )
         logger.info(
-            f"testbench_evaluation_token_usage{{type=output_tokens, workflow_name={workflow_name}, execution_id={execution_id}}} = {output_tokens}"
+            f"testbench_evaluation_token_usage{{type=output_tokens, workflow_name={workflow_name}, execution_id={execution_id}, execution_number={execution_number}}} = {output_tokens}"
         )
 
         # Total cost gauge
@@ -136,9 +165,12 @@ def create_and_push_metrics(
             description="Total cost of RAGAS evaluation in USD",
             unit="",
         )
-        cost_gauge.set(evaluation_data.total_cost, {"workflow_name": workflow_name, "execution_id": execution_id})
+        cost_gauge.set(
+            evaluation_data.total_cost,
+            {"workflow_name": workflow_name, "execution_id": execution_id, "execution_number": execution_number},
+        )
         logger.info(
-            f"testbench_evaluation_cost{{workflow_name={workflow_name}, execution_id={execution_id}}} = {evaluation_data.total_cost}"
+            f"testbench_evaluation_cost{{workflow_name={workflow_name}, execution_id={execution_id}, execution_number={execution_number}}} = {evaluation_data.total_cost}"
         )
 
         provider.force_flush()
@@ -150,7 +182,9 @@ def create_and_push_metrics(
         provider.shutdown()
 
 
-def publish_metrics(input_file: str, workflow_name: str, execution_id: str, otlp_endpoint: str) -> None:
+def publish_metrics(
+    input_file: str, workflow_name: str, execution_id: str, execution_number: int, otlp_endpoint: str
+) -> None:
     """
     Publish evaluation metrics via OpenTelemetry OTLP.
 
@@ -158,6 +192,7 @@ def publish_metrics(input_file: str, workflow_name: str, execution_id: str, otlp
         input_file: Path to the evaluation scores JSON file
         workflow_name: Name of the test workflow (e.g., 'weather-assistant-test').
         execution_id: Testkube execution ID for this workflow run.
+        execution_number: Number of the execution for the current workflow (e.g. 3)
         otlp_endpoint: URL of the OTLP endpoint (e.g., 'http://localhost:4318').
     """
     logger.info(f"Loading evaluation data from {input_file}...")
@@ -169,7 +204,7 @@ def publish_metrics(input_file: str, workflow_name: str, execution_id: str, otlp
 
     logger.info(f"Publishing metrics for {len(evaluation_data.individual_results)} samples...")
     logger.info(f"Workflow: {workflow_name}, Execution: {execution_id}")
-    create_and_push_metrics(evaluation_data, workflow_name, execution_id, otlp_endpoint)
+    create_and_push_metrics(evaluation_data, workflow_name, execution_id, execution_number, otlp_endpoint)
 
 
 if __name__ == "__main__":
@@ -196,6 +231,10 @@ if __name__ == "__main__":
         help="Testkube execution ID for this workflow run",
     )
     parser.add_argument(
+        "execution_number",
+        help="Testkube execution number for this workflow run (for use as a *numeric* identifier in Grafana)",
+    )
+    parser.add_argument(
         "otlp_endpoint",
         nargs="?",
         default="localhost:4318",
@@ -208,5 +247,6 @@ if __name__ == "__main__":
         input_file="data/results/evaluation_scores.json",
         workflow_name=args.workflow_name,
         execution_id=args.execution_id,
+        execution_number=args.execution_number,
         otlp_endpoint=args.otlp_endpoint,
     )
