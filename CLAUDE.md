@@ -60,11 +60,122 @@ uv run python3 scripts/setup.py "http://localhost:11020/dataset.csv"
 # Phase 2: Execute queries through agent via A2A protocol
 uv run python3 scripts/run.py "http://localhost:11010"
 
-# Phase 3: Evaluate responses using RAGAS metrics
-uv run python3 scripts/evaluate.py gemini-2.5-flash-lite "faithfulness answer_relevancy"
+# Phase 3: Evaluate responses using RAGAS metrics (uses default config)
+uv run python3 scripts/evaluate.py gemini-2.5-flash-lite
+
+# Or specify a custom config
+# uv run python3 scripts/evaluate.py gemini-2.5-flash-lite --metrics-config examples/metrics_advanced.json
 
 # Phase 4: Publish metrics to OTLP endpoint
 uv run python3 scripts/publish.py "workflow-name"
+```
+
+### Metrics Configuration
+
+**BREAKING CHANGE:** Metrics must now be specified via configuration file using `--metrics-config`.
+
+#### Quick Start
+
+**Using Default Config:**
+```shell
+# Uses examples/metrics_simple.json by default
+uv run python3 scripts/evaluate.py gemini-2.5-flash-lite
+```
+
+**Using Custom Config:**
+```shell
+# Simple metrics (pre-configured instances)
+uv run python3 scripts/evaluate.py gemini-2.5-flash-lite --metrics-config examples/metrics_simple.json
+
+# Advanced metrics (custom AspectCritic definitions)
+uv run python3 scripts/evaluate.py gemini-2.5-flash-lite --metrics-config examples/metrics_advanced.json
+```
+
+#### Configuration File Format
+
+Both JSON and YAML formats are supported:
+
+**JSON Example** (`examples/metrics_simple.json`):
+```json
+{
+  "version": "1.0",
+  "metrics": [
+    {"type": "instance", "name": "faithfulness"},
+    {"type": "instance", "name": "answer_relevancy"},
+    {"type": "instance", "name": "context_precision"}
+  ]
+}
+```
+
+**Advanced Configuration** (`examples/metrics_advanced.json`):
+```json
+{
+  "version": "1.0",
+  "metrics": [
+    {
+      "type": "instance",
+      "name": "faithfulness"
+    },
+    {
+      "type": "class",
+      "class_name": "AspectCritic",
+      "parameters": {
+        "name": "harmfulness",
+        "definition": "Does this contain harmful content?"
+      }
+    }
+  ]
+}
+```
+
+#### Available Metrics
+
+**Pre-configured Instances** (type: `instance`):
+- `faithfulness` - Measures factual consistency with contexts
+- `answer_relevancy` - Measures relevance of response to query
+- `answer_correctness` - Measures correctness vs reference
+- `answer_similarity` - Semantic similarity to reference
+- `context_precision` - Precision of retrieved contexts
+- `context_recall` - Recall of retrieved contexts
+- `context_entity_recall` - Entity-level context recall
+- `multimodal_faithness` - Faithfulness for multimodal content
+- `multimodal_relevance` - Relevance for multimodal content
+- `summarization_score` - Quality of summarization
+
+**Configurable Classes** (type: `class`):
+- `AspectCritic` - Custom aspect-based evaluation (REQUIRES: `name`, `definition`)
+- `Faithfulness` - Configurable faithfulness (OPTIONAL: `strictness`, `max_retries`)
+- `AnswerRelevancy` - Configurable relevancy (OPTIONAL: `strictness`)
+- Plus 30+ other classes
+
+To see all available metrics:
+```shell
+uv run python3 scripts/evaluate.py --help
+```
+
+#### Migration from Old CLI
+
+Old usage (NO LONGER WORKS):
+```shell
+# This will fail
+uv run python3 scripts/evaluate.py gemini-2.5-flash-lite faithfulness answer_relevancy
+```
+
+New usage:
+```shell
+# Create config file
+cat > my_metrics.json << EOF
+{
+  "version": "1.0",
+  "metrics": [
+    {"type": "instance", "name": "faithfulness"},
+    {"type": "instance", "name": "answer_relevancy"}
+  ]
+}
+EOF
+
+# Use config file
+uv run python3 scripts/evaluate.py gemini-2.5-flash-lite --metrics-config my_metrics.json
 ```
 
 ### Testkube Execution

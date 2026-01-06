@@ -306,7 +306,7 @@ async def multi_turn_experiment(row, agent_url: str, workflow_name: str) -> dict
 
                         # Add agent response to conversation
                         if agent_response_text:
-                            conversation_messages.append({"content": agent_response_text, "type": "agent"})
+                            conversation_messages.append({"content": agent_response_text, "type": "ai"})
                             logger.info(f"Agent response: {agent_response_text[:100]}...")
                         else:
                             logger.warning(f"Empty agent response for turn {turn_idx + 1}")
@@ -331,12 +331,14 @@ async def multi_turn_experiment(row, agent_url: str, workflow_name: str) -> dict
 
             # Return minimal result
             return {
+                **row,
                 "user_input": row.get("user_input"),
                 "trace_id": trace_id,
             }
 
         # Return result in MultiTurnSample format
         result = {
+            **row,
             "user_input": user_input_serialized,
             "trace_id": trace_id,
         }
