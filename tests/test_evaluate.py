@@ -4,12 +4,12 @@ Unit tests for evaluate.py
 Tests the RAGAS evaluation functionality.
 """
 
+import inspect
 import json
 import os
 import shutil
 import sys
 import tempfile
-from argparse import ArgumentError
 from pathlib import Path
 
 import pandas as pd
@@ -18,7 +18,15 @@ from ragas.metrics import Metric
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from evaluate import AVAILABLE_METRICS, convert_metrics, format_evaluation_scores, main
+from evaluate import (
+    AVAILABLE_METRIC_CLASSES,
+    AVAILABLE_METRIC_INSTANCES,
+    format_evaluation_scores,
+    get_metric_by_name,
+    instantiate_metric_from_class,
+    load_metrics_config,
+    main,
+)
 
 
 # Fixtures
@@ -226,27 +234,26 @@ def test_trace_id_preservation(tmp_path):
 
 
 # TestMain tests
-def test_main_no_metrics(experiment_data):
-    """Test main function with no metrics provided"""
+def test_main_no_config(experiment_data):
+    """Test main function with missing metrics config file"""
 
     tmp, original_cwd, experiment_file = experiment_data
     os.chdir(tmp)
 
     try:
-        # When metrics is None, the function should raise an error
-        # The actual error type depends on implementation
-        with pytest.raises(ArgumentError):
+        # When config file doesn't exist, should raise FileNotFoundError
+        with pytest.raises(FileNotFoundError):
             main(
                 output_file="results/evaluation_scores.json",
                 model="gemini-flash-latest",
-                metrics=None,
+                metrics_config="nonexistent_config.json",
             )
     finally:
         os.chdir(original_cwd)
 
 
-def test_main_successful_execution(experiment_data, monkeypatch):
-    """Test main function successful execution"""
+def test_main_successful_execution(experiment_data, monkeypatch, tmp_path):
+    """Test main function successful execution with config file"""
     from pathlib import Path
 
     from ragas.dataset_schema import EvaluationResult
@@ -255,9 +262,20 @@ def test_main_successful_execution(experiment_data, monkeypatch):
     os.chdir(tmp)
 
     try:
+        # Create a test config file
+        config_file = tmp_path / "test_metrics.json"
+        if not AVAILABLE_METRIC_INSTANCES:
+            pytest.skip("No metric instances available")
+
+        valid_metric = list(AVAILABLE_METRIC_INSTANCES.keys())[0]
+        config = {"version": "1.0", "metrics": [{"type": "instance", "name": valid_metric}]}
+
+        with open(config_file, 'w') as f:
+            json.dump(config, f)
+
         # Mock EvaluationDataset.from_jsonl
         class MockEvaluationDataset:
-            pass
+            samples = []  # Add samples attribute for dataset type detection
 
         mock_dataset = MockEvaluationDataset()
 
@@ -307,18 +325,12 @@ def test_main_successful_execution(experiment_data, monkeypatch):
         monkeypatch.setattr("evaluate.ChatOpenAI", mock_chat_openai_init)
         monkeypatch.setattr("evaluate.LangchainLLMWrapper", MockLLMWrapper)
 
-        # Get a valid metric name
-        if not AVAILABLE_METRICS:
-            pytest.skip("No metrics available")
-
-        valid_metric = list(AVAILABLE_METRICS.keys())[0]
-
-        # Run main
+        # Run main with config file
         output_file = "results/evaluation_scores.json"
         main(
             output_file=output_file,
             model="gemini-flash-latest",
-            metrics=[valid_metric],
+            metrics_config=str(config_file),
         )
 
         # Verify output file was created
@@ -337,66 +349,156 @@ def test_main_successful_execution(experiment_data, monkeypatch):
         os.chdir(original_cwd)
 
 
-# TestAvailableMetrics tests
-def test_available_metrics_loaded():
-    """Test that AVAILABLE_METRICS is populated correctly"""
-    # Should be a non-empty dictionary
-    assert isinstance(AVAILABLE_METRICS, dict)
-    assert len(AVAILABLE_METRICS) > 0
+# TestMetricDiscovery tests
+def test_metric_discovery():
+    """Test that both metric instances and classes are discovered"""
+    # Test instances
+    assert isinstance(AVAILABLE_METRIC_INSTANCES, dict)
+    assert len(AVAILABLE_METRIC_INSTANCES) > 0
+    for name, instance in AVAILABLE_METRIC_INSTANCES.items():
+        assert isinstance(name, str)
+        assert isinstance(instance, Metric)
 
-    # All keys should be strings
-    for key in AVAILABLE_METRICS.keys():
-        assert isinstance(key, str)
-
-    # All values should be Metric instances
-    for value in AVAILABLE_METRICS.values():
-        assert isinstance(value, Metric)
-
-
-# TestConvertMetrics tests
-def test_convert_metrics_with_valid_metrics():
-    """Test that convert_metrics correctly converts valid metric names to objects"""
-
-    # Use metrics that are commonly available in RAGAS
-    metric_names = ["faithfulness", "answer_relevancy"]
-
-    # Only test with metrics that actually exist in AVAILABLE_METRICS
-    available_names = [name for name in metric_names if name in AVAILABLE_METRICS]
-
-    if not available_names:
-        pytest.skip("Required metrics not available in this RAGAS version")
-
-    metric_objects = convert_metrics(available_names)
-
-    # Verify we got the right number of metrics
-    assert len(metric_objects) == len(available_names)
-
-    # Verify all returned objects are Metric instances
-    for obj in metric_objects:
-        assert isinstance(obj, Metric)
+    # Test classes
+    assert isinstance(AVAILABLE_METRIC_CLASSES, dict)
+    assert len(AVAILABLE_METRIC_CLASSES) > 0
+    for name, cls in AVAILABLE_METRIC_CLASSES.items():
+        assert isinstance(name, str)
+        assert inspect.isclass(cls)
+        assert issubclass(cls, Metric)
 
 
-def test_convert_metrics_with_invalid_metrics():
-    """Test that convert_metrics handles invalid metric names"""
+# Test get_metric_by_name
+def test_get_metric_by_name_instance():
+    """Test getting pre-configured metric instance"""
+    if not AVAILABLE_METRIC_INSTANCES:
+        pytest.skip("No metric instances available")
 
-    # Test with only invalid metrics - should raise ValueError
-    with pytest.raises(ValueError, match="No valid metrics provided"):
-        convert_metrics(["nonexistent_metric", "fake_metric"])
+    # Get first available instance
+    metric_name = list(AVAILABLE_METRIC_INSTANCES.keys())[0]
+    metric = get_metric_by_name(metric_name)
+    assert isinstance(metric, Metric)
+    assert metric.name == metric_name
 
 
-def test_convert_metrics_mixed_valid_invalid():
-    """Test convert_metrics with mixed valid and invalid metric names"""
+def test_get_metric_by_name_unknown():
+    """Test error handling for unknown metric"""
+    with pytest.raises(ValueError, match="Unknown metric"):
+        get_metric_by_name('nonexistent_metric_xyz')
 
-    # Get one valid metric name from AVAILABLE_METRICS
-    if not AVAILABLE_METRICS:
-        pytest.skip("No metrics available")
 
-    valid_metric = list(AVAILABLE_METRICS.keys())[0]
-    metric_names = [valid_metric, "nonexistent_metric", "fake_metric"]
+# Test instantiate_metric_from_class
+def test_instantiate_metric_from_class_success():
+    """Test successful class instantiation without parameters"""
+    if not AVAILABLE_METRIC_CLASSES:
+        pytest.skip("No metric classes available")
 
-    metric_objects = convert_metrics(metric_names)
+    # Find a class that can be instantiated without parameters
+    for class_name, metric_class in AVAILABLE_METRIC_CLASSES.items():
+        try:
+            metric = instantiate_metric_from_class(class_name, {})
+            assert isinstance(metric, Metric)
+            return  # Success!
+        except (TypeError, ValueError):
+            continue  # Try next class
+    pytest.skip("No metric classes can be instantiated without parameters")
 
-    # Should only return the valid metric
-    assert len(metric_objects) == 1
 
-    assert isinstance(metric_objects[0], Metric)
+def test_instantiate_metric_from_class_unknown():
+    """Test error for unknown class"""
+    with pytest.raises(ValueError, match="Unknown metric class"):
+        instantiate_metric_from_class('NonexistentClass', {})
+
+
+def test_instantiate_metric_from_class_invalid_params():
+    """Test error for invalid parameters"""
+    if not AVAILABLE_METRIC_CLASSES:
+        pytest.skip("No metric classes available")
+
+    # Use first available class with clearly invalid parameters
+    class_name = list(AVAILABLE_METRIC_CLASSES.keys())[0]
+    with pytest.raises(ValueError, match="Invalid parameters"):
+        instantiate_metric_from_class(class_name, {'completely_invalid_param_name_xyz': 'value'})
+
+
+# Test load_metrics_config
+def test_load_metrics_config_json(tmp_path):
+    """Test loading metrics from JSON config file"""
+    if not AVAILABLE_METRIC_INSTANCES:
+        pytest.skip("No metric instances available")
+
+    config_file = tmp_path / "metrics.json"
+    metric_name = list(AVAILABLE_METRIC_INSTANCES.keys())[0]
+
+    config = {"version": "1.0", "metrics": [{"type": "instance", "name": metric_name}]}
+
+    with open(config_file, 'w') as f:
+        json.dump(config, f)
+
+    metrics = load_metrics_config(str(config_file))
+    assert len(metrics) == 1
+    assert isinstance(metrics[0], Metric)
+    assert metrics[0].name == metric_name
+
+
+def test_load_metrics_config_with_class(tmp_path):
+    """Test loading metrics with class instantiation"""
+    if not AVAILABLE_METRIC_CLASSES:
+        pytest.skip("No metric classes available")
+
+    # Find a class that can be instantiated without parameters
+    for class_name in AVAILABLE_METRIC_CLASSES.keys():
+        try:
+            # Test if this class can be instantiated
+            instantiate_metric_from_class(class_name, {})
+
+            config_file = tmp_path / "metrics.json"
+            config = {
+                "version": "1.0",
+                "metrics": [{"type": "class", "class_name": class_name, "parameters": {}}],
+            }
+
+            with open(config_file, 'w') as f:
+                json.dump(config, f)
+
+            metrics = load_metrics_config(str(config_file))
+            assert len(metrics) == 1
+            assert isinstance(metrics[0], Metric)
+            return  # Success!
+        except (TypeError, ValueError):
+            continue  # Try next class
+
+    pytest.skip("No metric classes can be instantiated without parameters")
+
+
+def test_load_metrics_config_invalid_format(tmp_path):
+    """Test error for invalid file format"""
+    config_file = tmp_path / "metrics.txt"
+    config_file.write_text("invalid")
+
+    with pytest.raises(ValueError, match="Unsupported config file format"):
+        load_metrics_config(str(config_file))
+
+
+def test_load_metrics_config_missing_metrics_key(tmp_path):
+    """Test error for missing 'metrics' key"""
+    config_file = tmp_path / "metrics.json"
+
+    with open(config_file, 'w') as f:
+        json.dump({"version": "1.0"}, f)
+
+    with pytest.raises(ValueError, match="must contain 'metrics' key"):
+        load_metrics_config(str(config_file))
+
+
+def test_load_metrics_config_empty_metrics(tmp_path):
+    """Test error for empty metrics list"""
+    config_file = tmp_path / "metrics.json"
+
+    config = {"version": "1.0", "metrics": []}
+
+    with open(config_file, 'w') as f:
+        json.dump(config, f)
+
+    with pytest.raises(ValueError, match="contains no valid metrics"):
+        load_metrics_config(str(config_file))

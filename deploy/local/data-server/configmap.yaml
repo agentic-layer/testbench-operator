@@ -5,7 +5,7 @@ metadata:
 data:
   dataset.json: |
     [
-      {"user_input": [{"content": "I need to increase my credit limit and check why my last transaction at Walmart was declined.", "type": "human"}, {"content": "That's not possible, I had enough money in my account.", "type": "human"}, {"content": "Oh, I forgot about the hotel booking.", "type": "human"}, {"content": "What about increasing my credit limit?", "type": "human"}]}
+      {"user_input": [{"content": "What is the weather like in New York right now?", "type": "human"}, {"content": "What time is it in New York?", "type": "human"}]}
     ]
   dataset.csv: |
     user_input,retrieved_contexts,reference

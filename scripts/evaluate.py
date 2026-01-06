@@ -3,7 +3,6 @@ import inspect
 import json
 import logging
 import os
-from argparse import ArgumentError
 from dataclasses import asdict, dataclass
 from logging import Logger
 from typing import Any
@@ -22,59 +21,203 @@ logging.basicConfig(level=logging.INFO)
 logger: Logger = logging.getLogger(__name__)
 
 
-def get_available_metrics() -> dict[str, Metric]:
+def discover_metrics() -> tuple[dict[str, Metric], dict[str, type[Metric]]]:
     """
-    Loads all Metric classes from Ragas
-    Returns a dict mapping metric names to metric instances.
+    Discover both pre-configured instances and metric classes from Ragas.
+
+    Returns:
+        (instances, classes) where:
+        - instances: dict mapping names to pre-configured Metric instances
+        - classes: dict mapping class names to Metric class types
     """
-    available_metrics: dict[str, Metric] = {}
+    instances: dict[str, Metric] = {}
+    classes: dict[str, type[Metric]] = {}
 
     # Iterate through all members of the metrics module
     for name, obj in inspect.getmembers(metrics_module):
-        # Check if it's a class and is a subclass of Metric (but not Metric itself)
+        if name.startswith('_'):
+            continue
+
+        # Check if it's a Metric class (but not base Metric)
         if inspect.isclass(obj) and issubclass(obj, Metric) and obj is not Metric:
-            try:
-                # Instantiate the metric
-                metric_instance = obj()
-                # Use the metric's name attribute
-                metric_name = metric_instance.name
-                available_metrics[metric_name] = metric_instance
-            except Exception:
-                # Skip metrics that can't be instantiated without parameters
-                logger.info(f"Exception encountered: {Exception}")
-                pass
+            classes[name] = obj
+        # Check if it's a pre-configured metric instance
+        elif isinstance(obj, Metric):
+            metric_name = obj.name if hasattr(obj, 'name') else name
+            instances[metric_name] = obj
 
-    return available_metrics
+    return instances, classes
 
 
-# Get all available metrics
-AVAILABLE_METRICS = get_available_metrics()
+# Discover all available metric instances and classes
+AVAILABLE_METRIC_INSTANCES, AVAILABLE_METRIC_CLASSES = discover_metrics()
 
 
-def convert_metrics(metrics: list[str]) -> list:
+def get_metric_by_name(metric_name: str) -> Metric:
     """
-    Map metric names to actual metric objects
+    Get a metric instance by name (checks instances first, then tries classes).
 
     Args:
-        metrics: List of metric names as strings (e.g., ["faithfulness", "answer_relevancy"])
+        metric_name: Name of metric (e.g., "faithfulness", "answer_relevancy")
 
     Returns:
-        List containing metric objects
+        Metric instance
+
+    Raises:
+        ValueError: If metric not found or can't be instantiated
     """
+    # Try pre-configured instance first
+    if metric_name in AVAILABLE_METRIC_INSTANCES:
+        return AVAILABLE_METRIC_INSTANCES[metric_name]
 
-    # Map metric names to actual metric objects
-    metric_objects = []
-    for metric_name in metrics:
-        if metric_name in AVAILABLE_METRICS:
-            metric_objects.append(AVAILABLE_METRICS[metric_name])
-        else:
-            logger.warning(f"Unknown metric '{metric_name}', skipping...")
-            logger.warning(f"Available metrics: {', '.join(AVAILABLE_METRICS.keys())}")
+    # Try to find class by name (case-insensitive matching)
+    for class_name, metric_class in AVAILABLE_METRIC_CLASSES.items():
+        if class_name.lower() == metric_name.lower():
+            try:
+                return metric_class()
+            except Exception as e:
+                raise ValueError(
+                    f"Metric class '{class_name}' requires parameters: {e}\n"
+                    f"Use --metrics-config to provide configuration."
+                )
 
-    if not metric_objects:
-        raise ValueError("No valid metrics provided for evaluation")
+    raise ValueError(
+        f"Unknown metric '{metric_name}'.\n"
+        f"Available instances: {', '.join(sorted(AVAILABLE_METRIC_INSTANCES.keys()))}\n"
+        f"Available classes: {', '.join(sorted(AVAILABLE_METRIC_CLASSES.keys()))}"
+    )
 
-    return metric_objects
+
+def instantiate_metric_from_class(class_name: str, parameters: dict[str, Any]) -> Metric:
+    """
+    Instantiate a metric class with custom parameters.
+
+    Args:
+        class_name: Name of metric class (e.g., "AspectCritic")
+        parameters: Dictionary of constructor parameters
+
+    Returns:
+        Metric instance
+
+    Raises:
+        ValueError: If class not found or instantiation fails
+    """
+    if class_name not in AVAILABLE_METRIC_CLASSES:
+        raise ValueError(
+            f"Unknown metric class '{class_name}'.\n"
+            f"Available classes: {', '.join(sorted(AVAILABLE_METRIC_CLASSES.keys()))}"
+        )
+
+    metric_class = AVAILABLE_METRIC_CLASSES[class_name]
+
+    try:
+        return metric_class(**parameters)
+    except TypeError as e:
+        # Extract signature for helpful error message
+        sig = inspect.signature(metric_class.__init__)
+        raise ValueError(f"Invalid parameters for {class_name}: {e}\n" f"Expected signature: {sig}")
+
+
+def _load_metric_from_definition(metric_def: dict) -> Metric:
+    """
+    Load a single metric from its configuration definition.
+
+    Args:
+        metric_def: Dictionary containing metric definition
+
+    Returns:
+        Metric instance
+
+    Raises:
+        ValueError: If definition is invalid or metric can't be loaded
+    """
+    # Validate required fields
+    if 'type' not in metric_def:
+        raise ValueError("Metric definition must include 'type' field")
+
+    metric_type = metric_def['type']
+
+    if metric_type == 'instance':
+        # Load pre-configured instance
+        if 'name' not in metric_def:
+            raise ValueError("Instance type requires 'name' field")
+
+        name = metric_def['name']
+        if name not in AVAILABLE_METRIC_INSTANCES:
+            raise ValueError(
+                f"Unknown instance '{name}'.\n"
+                f"Available: {', '.join(sorted(AVAILABLE_METRIC_INSTANCES.keys()))}"
+            )
+
+        return AVAILABLE_METRIC_INSTANCES[name]
+
+    elif metric_type == 'class':
+        # Instantiate class with parameters
+        if 'class_name' not in metric_def:
+            raise ValueError("Class type requires 'class_name' field")
+
+        class_name = metric_def['class_name']
+        parameters = metric_def.get('parameters', {})
+
+        return instantiate_metric_from_class(class_name, parameters)
+
+    else:
+        raise ValueError(f"Unknown metric type '{metric_type}'.\n" f"Supported types: 'instance', 'class'")
+
+
+def load_metrics_config(config_path: str) -> list[Metric]:
+    """
+    Load metrics configuration from JSON or YAML file.
+
+    Args:
+        config_path: Path to configuration file (.json or .yaml/.yml)
+
+    Returns:
+        List of configured Metric instances
+
+    Raises:
+        ValueError: If config file invalid or metrics can't be loaded
+    """
+    # Determine file format and load
+    if config_path.endswith('.json'):
+        with open(config_path, 'r') as f:
+            config = json.load(f)
+    elif config_path.endswith(('.yaml', '.yml')):
+        try:
+            import yaml
+        except ImportError:
+            raise ValueError(
+                "YAML support requires 'pyyaml' package.\n"
+                "Install with: uv add pyyaml\n"
+                "Or use JSON format instead: metrics.json"
+            )
+        with open(config_path, 'r') as f:
+            config = yaml.safe_load(f)
+    else:
+        raise ValueError(
+            f"Unsupported config file format: {config_path}\n" f"Supported formats: .json, .yaml, .yml"
+        )
+
+    # Validate config structure
+    if 'metrics' not in config:
+        raise ValueError("Config file must contain 'metrics' key")
+
+    if not isinstance(config['metrics'], list):
+        raise ValueError("'metrics' must be a list")
+
+    # Load each metric
+    metrics: list[Metric] = []
+    for i, metric_def in enumerate(config['metrics']):
+        try:
+            metric = _load_metric_from_definition(metric_def)
+            metrics.append(metric)
+        except Exception as e:
+            raise ValueError(f"Error loading metric at index {i}: {e}")
+
+    if not metrics:
+        raise ValueError("Config file contains no valid metrics")
+
+    return metrics
 
 
 @dataclass
@@ -164,7 +307,7 @@ def format_evaluation_scores(
 def main(
     output_file: str,
     model: str,
-    metrics: list[str] | None = None,
+    metrics_config: str,
     cost_per_input_token: float = 5.0 / 1e6,
     cost_per_output_token: float = 15.0 / 1e6,
 ) -> None:
@@ -174,11 +317,14 @@ def main(
     Args:
         output_file: Path to save evaluation_scores.json
         model: Model name to use for evaluation
-        metrics: List of metric names to calculate
+        metrics_config: Path to metrics configuration file (JSON or YAML)
+        cost_per_input_token: Cost per input token
+        cost_per_output_token: Cost per output token
     """
-    # Check if any metrics were provided
-    if metrics is None:
-        raise ArgumentError(argument=metrics, message="No metrics were provided as arguments")
+    # Load metrics from configuration file
+    logger.info(f"Loading metrics from config: {metrics_config}")
+    metrics = load_metrics_config(metrics_config)
+    logger.info(f"Loaded {len(metrics)} metrics: {', '.join([m.name for m in metrics])}")
 
     # Create LLM client using the AI-Gateway
     # Setting a placeholder for the api_key since we instantiate a ChatOpenAI object,
@@ -189,11 +335,18 @@ def main(
 
     dataset = EvaluationDataset.from_jsonl("data/experiments/ragas_experiment.jsonl")
 
+    # Detect and log dataset type
+    if dataset.samples:
+        from ragas.dataset_schema import MultiTurnSample
+
+        is_multi_turn = isinstance(dataset.samples[0], MultiTurnSample)
+        logger.info(f"Loaded {'multi-turn' if is_multi_turn else 'single-turn'} dataset")
+
     # Calculate metrics
-    logger.info(f"Calculating metrics: {', '.join(metrics)}...")
+    logger.info(f"Calculating metrics: {', '.join([m.name for m in metrics])}...")
     ragas_result = evaluate(
         dataset=dataset,
-        metrics=convert_metrics(metrics),
+        metrics=metrics,
         llm=llm,
         token_usage_parser=get_token_usage_for_openai,
     )
@@ -223,16 +376,33 @@ def main(
 
 
 if __name__ == "__main__":
-    # Parse the parameters (model and metrics) evaluate.py was called with
+    # Parse the parameters (model and metrics-config) evaluate.py was called with
     parser = argparse.ArgumentParser(
-        description="Evaluate results using RAGAS metrics",
+        description="Evaluate results using RAGAS metrics via configuration file",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=f"""
-            Available metrics: {", ".join(AVAILABLE_METRICS.keys())}
+Available metric instances (pre-configured):
+  {', '.join(sorted(AVAILABLE_METRIC_INSTANCES.keys()))}
 
-            Examples:
-            python3 scripts/evaluate.py gemini-2.5-flash-lite faithfulness
-            python3 scripts/evaluate.py gemini-2.5-flash-lite faithfulness context_precision context_recall
+Available metric classes (configurable via --metrics-config):
+  {', '.join(sorted(AVAILABLE_METRIC_CLASSES.keys()))}
+
+Examples:
+  python3 scripts/evaluate.py gemini-2.5-flash-lite --metrics-config examples/metrics_simple.json
+  python3 scripts/evaluate.py gemini-2.5-flash-lite --metrics-config examples/metrics_advanced.json
+
+Config file format (JSON):
+  {{
+    "version": "1.0",
+    "metrics": [
+      {{"type": "instance", "name": "faithfulness"}},
+      {{
+        "type": "class",
+        "class_name": "AspectCritic",
+        "parameters": {{"name": "harmfulness", "definition": "Is this harmful?"}}
+      }}
+    ]
+  }}
         """,
     )
 
@@ -243,10 +413,10 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "metrics",
-        nargs="+",
-        choices=list(AVAILABLE_METRICS.keys()),
-        help="At least one (or more) metrics to evaluate (e.g., faithfulness, answer_relevancy)",
+        "--metrics-config",
+        type=str,
+        default="config/metrics.json",
+        help="Path to metrics configuration file (JSON or YAML). Default: examples/metrics_simple.json",
     )
 
     parser.add_argument(
@@ -265,11 +435,11 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # Run evaluation with the 'model' and 'metrics' provided as parameters, 'output_file' is hardcoded
+    # Run evaluation with the 'model' and 'metrics_config' provided as parameters, 'output_file' is hardcoded
     main(
         output_file="data/results/evaluation_scores.json",
         model=args.model,
-        metrics=args.metrics,
+        metrics_config=args.metrics_config,
         cost_per_input_token=args.cost_per_input,
         cost_per_output_token=args.cost_per_output,
     )
