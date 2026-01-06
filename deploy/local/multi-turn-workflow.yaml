@@ -8,18 +8,24 @@ metadata:
     app: testworkflows
 
 spec:
+  # Pod configuration with volumes
+  pod:
+    volumes:
+      - name: metrics-config
+        configMap:
+          name: multi-turn-metrics-config
+
   container:
     image: ghcr.io/agentic-layer/testbench/testworkflows:latest
     env:
       - name: OPENAI_API_BASE
         value: "http://ai-gateway-litellm.ai-gateway:4000"
-
-  # Global configuration that applies to all steps
-  config:
-    # Dataset configuration
-    datasetUrl:
-      type: string
-      description: "URL to the dataset file"
+      - name: OTEL_EXPORTER_OTLP_ENDPOINT
+        value: "http://lgtm.monitoring:4318"
+    volumeMounts:
+      - name: metrics-config
+        mountPath: /app/config/metrics.yaml
+        subPath: metrics.yaml
 
   # Steps using the templates
   steps:
@@ -28,4 +34,24 @@ spec:
       use:
         - name: ragas-setup-template
           config:
-            datasetUrl: "{{ config.datasetUrl }}"
+            datasetUrl: "http://data-server.data-server:8000/dataset.csv"
+
+    # Step 2: Run - Execute agent queries
+    - name: run
+      use:
+        - name: ragas-run-template
+          config:
+            agentUrl: "http://weather-agent.sample-agents:8000"
+
+    # Step 3: Evaluate - Run RAGAS evaluation
+    - name: evaluate
+      use:
+        - name: ragas-evaluate-template
+          config:
+            model: "gemini-2.5-flash-lite"
+            metricsConfigPath: "/app/config/metrics.yaml"
+
+    # Step 4: Publish - Push metrics to OTLP
+    - name: publish
+      use:
+        - name: ragas-publish-template

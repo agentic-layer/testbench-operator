@@ -12,9 +12,10 @@ spec:
     model:
       type: string
       description: "Model name to use for evaluation (e.g., gemini-2.5-flash-lite)"
-    metrics:
+    metricsConfigPath:
       type: string
-      description: "Space-separated list of metrics to evaluate (e.g., 'nv_accuracy context_precision')"
+      description: "Path to metrics configuration file (JSON or YAML)"
+      default: "config/metrics.yaml"
     image:
       type: string
       description: "Docker image to use for the evaluate step"
@@ -29,7 +30,7 @@ spec:
           - -c
         args:
           - |
-            uv run python3 evaluate.py "{{ config.model }}" {{ config.metrics }} && \
+            uv run python3 evaluate.py "{{ config.model }}" --metrics-config "{{ config.metricsConfigPath }}" && \
             if [ -f data/results/evaluation_scores.json ]; then
               echo "✓ Evaluation completed"
               cat data/results/evaluation_scores.json

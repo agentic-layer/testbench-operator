@@ -5,4 +5,5 @@ resources:
   - weather-agent.yaml
   - data-server/
   - ../base
+  - multi-turn-metrics-configmap.yaml
   - multi-turn-workflow.yaml

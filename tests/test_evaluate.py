@@ -19,10 +19,8 @@ from ragas.metrics import Metric
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 from evaluate import (
-    AVAILABLE_METRIC_CLASSES,
-    AVAILABLE_METRIC_INSTANCES,
+    MetricsRegistry,
     format_evaluation_scores,
-    get_metric_by_name,
     instantiate_metric_from_class,
     load_metrics_config,
     main,
@@ -64,6 +62,37 @@ def experiment_data(temp_dir):
             f.write(json.dumps(item) + "\n")
 
     return tmp, original_cwd, experiment_file
+
+
+@pytest.fixture
+def default_registry():
+    """Fixture providing a default MetricsRegistry."""
+    return MetricsRegistry.create_default()
+
+
+@pytest.fixture
+def mock_registry():
+    """Fixture providing a registry with mock metrics for testing."""
+    from unittest.mock import MagicMock
+
+    registry = MetricsRegistry()
+
+    # Clear auto-discovered metrics
+    registry._instances = {}
+    registry._classes = {}
+
+    # Add mock instance
+    mock_instance = MagicMock(spec=Metric)
+    mock_instance.name = "test_metric"
+    registry._instances["test_metric"] = mock_instance
+
+    # Add mock class
+    mock_class = MagicMock(spec=type)
+    mock_class.__name__ = "TestMetricClass"
+    mock_class.return_value = MagicMock(spec=Metric)
+    registry._classes["TestMetricClass"] = mock_class
+
+    return registry
 
 
 # TestFormatEvaluationScores tests
@@ -253,8 +282,9 @@ def test_main_no_config(experiment_data):
 
 
 def test_main_successful_execution(experiment_data, monkeypatch, tmp_path):
-    """Test main function successful execution with config file"""
+    """Test main function successful execution with config file."""
     from pathlib import Path
+    from unittest.mock import MagicMock
 
     from ragas.dataset_schema import EvaluationResult
 
@@ -262,15 +292,23 @@ def test_main_successful_execution(experiment_data, monkeypatch, tmp_path):
     os.chdir(tmp)
 
     try:
-        # Create a test config file
+        # Create a mock registry
+        mock_registry = MagicMock()
+        mock_metric = MagicMock(spec=Metric)
+        mock_metric.name = "test_metric"
+        mock_registry.load_from_config.return_value = [mock_metric]
+
+        # Mock MetricsRegistry.create_default() to return our mock
+        monkeypatch.setattr("evaluate.MetricsRegistry.create_default", lambda: mock_registry)
+
+        # Create config file
         config_file = tmp_path / "test_metrics.json"
-        if not AVAILABLE_METRIC_INSTANCES:
-            pytest.skip("No metric instances available")
+        config = {
+            "version": "1.0",
+            "metrics": [{"type": "instance", "name": "test_metric"}]
+        }
 
-        valid_metric = list(AVAILABLE_METRIC_INSTANCES.keys())[0]
-        config = {"version": "1.0", "metrics": [{"type": "instance", "name": valid_metric}]}
-
-        with open(config_file, 'w') as f:
+        with open(config_file, "w") as f:
             json.dump(config, f)
 
         # Mock EvaluationDataset.from_jsonl
@@ -350,53 +388,36 @@ def test_main_successful_execution(experiment_data, monkeypatch, tmp_path):
 
 
 # TestMetricDiscovery tests
-def test_metric_discovery():
-    """Test that both metric instances and classes are discovered"""
+def test_metric_discovery(default_registry):
+    """Test that both metric instances and classes are discovered."""
+    instances = default_registry.list_instances()
+    classes = default_registry.list_classes()
+
     # Test instances
-    assert isinstance(AVAILABLE_METRIC_INSTANCES, dict)
-    assert len(AVAILABLE_METRIC_INSTANCES) > 0
-    for name, instance in AVAILABLE_METRIC_INSTANCES.items():
-        assert isinstance(name, str)
+    assert len(instances) > 0
+    for name in instances:
+        instance = default_registry.get_instance(name)
         assert isinstance(instance, Metric)
 
     # Test classes
-    assert isinstance(AVAILABLE_METRIC_CLASSES, dict)
-    assert len(AVAILABLE_METRIC_CLASSES) > 0
-    for name, cls in AVAILABLE_METRIC_CLASSES.items():
-        assert isinstance(name, str)
+    assert len(classes) > 0
+    for name in classes:
+        cls = default_registry.get_class(name)
         assert inspect.isclass(cls)
         assert issubclass(cls, Metric)
 
 
-# Test get_metric_by_name
-def test_get_metric_by_name_instance():
-    """Test getting pre-configured metric instance"""
-    if not AVAILABLE_METRIC_INSTANCES:
-        pytest.skip("No metric instances available")
-
-    # Get first available instance
-    metric_name = list(AVAILABLE_METRIC_INSTANCES.keys())[0]
-    metric = get_metric_by_name(metric_name)
-    assert isinstance(metric, Metric)
-    assert metric.name == metric_name
-
-
-def test_get_metric_by_name_unknown():
-    """Test error handling for unknown metric"""
-    with pytest.raises(ValueError, match="Unknown metric"):
-        get_metric_by_name('nonexistent_metric_xyz')
-
-
 # Test instantiate_metric_from_class
-def test_instantiate_metric_from_class_success():
-    """Test successful class instantiation without parameters"""
-    if not AVAILABLE_METRIC_CLASSES:
+def test_instantiate_metric_from_class_success(default_registry):
+    """Test successful class instantiation without parameters."""
+    classes = default_registry.list_classes()
+    if not classes:
         pytest.skip("No metric classes available")
 
     # Find a class that can be instantiated without parameters
-    for class_name, metric_class in AVAILABLE_METRIC_CLASSES.items():
+    for class_name in classes:
         try:
-            metric = instantiate_metric_from_class(class_name, {})
+            metric = instantiate_metric_from_class(class_name, {}, registry=default_registry)
             assert isinstance(metric, Metric)
             return  # Success!
         except (TypeError, ValueError):
@@ -404,53 +425,62 @@ def test_instantiate_metric_from_class_success():
     pytest.skip("No metric classes can be instantiated without parameters")
 
 
-def test_instantiate_metric_from_class_unknown():
-    """Test error for unknown class"""
-    with pytest.raises(ValueError, match="Unknown metric class"):
-        instantiate_metric_from_class('NonexistentClass', {})
+def test_instantiate_metric_from_class_unknown(default_registry):
+    """Test error for unknown class."""
+    with pytest.raises(ValueError, match="Unknown class"):
+        instantiate_metric_from_class("NonexistentClass", {}, registry=default_registry)
 
 
-def test_instantiate_metric_from_class_invalid_params():
-    """Test error for invalid parameters"""
-    if not AVAILABLE_METRIC_CLASSES:
+def test_instantiate_metric_from_class_invalid_params(default_registry):
+    """Test error for invalid parameters."""
+    classes = default_registry.list_classes()
+    if not classes:
         pytest.skip("No metric classes available")
 
-    # Use first available class with clearly invalid parameters
-    class_name = list(AVAILABLE_METRIC_CLASSES.keys())[0]
+    class_name = classes[0]
     with pytest.raises(ValueError, match="Invalid parameters"):
-        instantiate_metric_from_class(class_name, {'completely_invalid_param_name_xyz': 'value'})
+        instantiate_metric_from_class(
+            class_name,
+            {"completely_invalid_param_name_xyz": "value"},
+            registry=default_registry
+        )
 
 
 # Test load_metrics_config
-def test_load_metrics_config_json(tmp_path):
-    """Test loading metrics from JSON config file"""
-    if not AVAILABLE_METRIC_INSTANCES:
+def test_load_metrics_config_json(tmp_path, default_registry):
+    """Test loading metrics from JSON config file."""
+    instances = default_registry.list_instances()
+    if not instances:
         pytest.skip("No metric instances available")
 
     config_file = tmp_path / "metrics.json"
-    metric_name = list(AVAILABLE_METRIC_INSTANCES.keys())[0]
+    metric_name = instances[0]
 
-    config = {"version": "1.0", "metrics": [{"type": "instance", "name": metric_name}]}
+    config = {
+        "version": "1.0",
+        "metrics": [{"type": "instance", "name": metric_name}]
+    }
 
-    with open(config_file, 'w') as f:
+    with open(config_file, "w") as f:
         json.dump(config, f)
 
-    metrics = load_metrics_config(str(config_file))
+    metrics = load_metrics_config(str(config_file), registry=default_registry)
     assert len(metrics) == 1
     assert isinstance(metrics[0], Metric)
     assert metrics[0].name == metric_name
 
 
-def test_load_metrics_config_with_class(tmp_path):
-    """Test loading metrics with class instantiation"""
-    if not AVAILABLE_METRIC_CLASSES:
+def test_load_metrics_config_with_class(tmp_path, default_registry):
+    """Test loading metrics with class instantiation."""
+    classes = default_registry.list_classes()
+    if not classes:
         pytest.skip("No metric classes available")
 
     # Find a class that can be instantiated without parameters
-    for class_name in AVAILABLE_METRIC_CLASSES.keys():
+    for class_name in classes:
         try:
             # Test if this class can be instantiated
-            instantiate_metric_from_class(class_name, {})
+            instantiate_metric_from_class(class_name, {}, registry=default_registry)
 
             config_file = tmp_path / "metrics.json"
             config = {
@@ -458,10 +488,10 @@ def test_load_metrics_config_with_class(tmp_path):
                 "metrics": [{"type": "class", "class_name": class_name, "parameters": {}}],
             }
 
-            with open(config_file, 'w') as f:
+            with open(config_file, "w") as f:
                 json.dump(config, f)
 
-            metrics = load_metrics_config(str(config_file))
+            metrics = load_metrics_config(str(config_file), registry=default_registry)
             assert len(metrics) == 1
             assert isinstance(metrics[0], Metric)
             return  # Success!
@@ -484,7 +514,7 @@ def test_load_metrics_config_missing_metrics_key(tmp_path):
     """Test error for missing 'metrics' key"""
     config_file = tmp_path / "metrics.json"
 
-    with open(config_file, 'w') as f:
+    with open(config_file, "w") as f:
         json.dump({"version": "1.0"}, f)
 
     with pytest.raises(ValueError, match="must contain 'metrics' key"):
@@ -497,8 +527,103 @@ def test_load_metrics_config_empty_metrics(tmp_path):
 
     config = {"version": "1.0", "metrics": []}
 
-    with open(config_file, 'w') as f:
+    with open(config_file, "w") as f:
         json.dump(config, f)
 
     with pytest.raises(ValueError, match="contains no valid metrics"):
         load_metrics_config(str(config_file))
+
+
+# Test MetricsRegistry class
+def test_registry_initialization():
+    """Test that registry initializes and discovers metrics."""
+    registry = MetricsRegistry()
+
+    assert len(registry.list_instances()) > 0
+    assert len(registry.list_classes()) > 0
+
+
+def test_registry_get_instance(default_registry):
+    """Test getting instances from registry."""
+    instances = default_registry.list_instances()
+    if not instances:
+        pytest.skip("No instances available")
+
+    name = instances[0]
+    metric = default_registry.get_instance(name)
+    assert isinstance(metric, Metric)
+
+
+def test_registry_get_instance_unknown(default_registry):
+    """Test error for unknown instance."""
+    with pytest.raises(ValueError, match="Unknown instance"):
+        default_registry.get_instance("nonexistent_xyz")
+
+
+def test_registry_get_class(default_registry):
+    """Test getting classes from registry."""
+    classes = default_registry.list_classes()
+    if not classes:
+        pytest.skip("No classes available")
+
+    name = classes[0]
+    cls = default_registry.get_class(name)
+    assert inspect.isclass(cls)
+    assert issubclass(cls, Metric)
+
+
+def test_registry_get_class_unknown(default_registry):
+    """Test error for unknown class."""
+    with pytest.raises(ValueError, match="Unknown class"):
+        default_registry.get_class("NonexistentClass")
+
+
+def test_registry_instantiate_class(default_registry):
+    """Test instantiating class via registry."""
+    classes = default_registry.list_classes()
+    if not classes:
+        pytest.skip("No classes available")
+
+    # Find instantiable class
+    for class_name in classes:
+        try:
+            metric = default_registry.instantiate_class(class_name, {})
+            assert isinstance(metric, Metric)
+            return
+        except (TypeError, ValueError):
+            continue
+    pytest.skip("No classes instantiable without params")
+
+
+def test_registry_load_from_config(tmp_path, default_registry):
+    """Test loading config via registry method."""
+    instances = default_registry.list_instances()
+    if not instances:
+        pytest.skip("No instances available")
+
+    config_file = tmp_path / "test.json"
+    config = {
+        "version": "1.0",
+        "metrics": [{"type": "instance", "name": instances[0]}]
+    }
+
+    with open(config_file, "w") as f:
+        json.dump(config, f)
+
+    metrics = default_registry.load_from_config(str(config_file))
+    assert len(metrics) == 1
+    assert isinstance(metrics[0], Metric)
+
+
+def test_mock_registry_fixture(mock_registry):
+    """Test that mock registry fixture works."""
+    assert mock_registry.list_instances() == ["test_metric"]
+    assert mock_registry.list_classes() == ["TestMetricClass"]
+
+    # Test instance retrieval
+    instance = mock_registry.get_instance("test_metric")
+    assert instance.name == "test_metric"
+
+    # Test class instantiation
+    metric = mock_registry.instantiate_class("TestMetricClass", {})
+    assert isinstance(metric, Metric)
