@@ -66,8 +66,8 @@ uv run python3 scripts/evaluate.py gemini-2.5-flash-lite
 # Or specify a custom config
 # uv run python3 scripts/evaluate.py gemini-2.5-flash-lite --metrics-config examples/metrics_advanced.json
 
-# Phase 4: Publish metrics to OTLP endpoint
-uv run python3 scripts/publish.py "workflow-name"
+# Phase 4: Publish metrics to OTLP endpoint (requires execution_id and execution_number)
+OTEL_EXPORTER_OTLP_ENDPOINT="http://localhost:4318" uv run python3 scripts/publish.py "workflow-name" "exec-001" 1
 ```
 
 ### Metrics Configuration
@@ -231,8 +231,8 @@ make run
 - **Purpose**: Calculates RAGAS metrics using LLM-as-a-judge via AI Gateway, tracks tokens and costs
 
 **Phase 4: Publish** (`scripts/publish.py`)
-- **Input**: `data/results/evaluation_scores.json` + workflow name
-- **Output**: Metrics published to OTLP endpoint
+- **Input**: `data/results/evaluation_scores.json` + workflow name + execution ID + execution number
+- **Output**: Metrics published to OTLP endpoint (configured via `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable)
 - **Purpose**: Sends evaluation results to observability backend (LGTM/Grafana) via OpenTelemetry
 
 ### Data Flow

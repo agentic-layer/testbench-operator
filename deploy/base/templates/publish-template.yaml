@@ -6,18 +6,8 @@ metadata:
   labels:
     testkube.io/test-category: ragas-evaluation
     app: testworkflows
-spec:
-  # Configuration parameters that can be overridden
-  config:
-    otlpEndpoint:
-      type: string
-      description: "URL of the OTLP endpoint"
-      default: "http://lgtm.monitoring:4318"
-    image:
-      type: string
-      description: "Docker image to use for the publish step"
-      default: "ghcr.io/agentic-layer/testbench/testworkflows:latest"
 
+spec:
   # Steps to execute
   steps:
     - name: publish-metrics
@@ -27,4 +17,3 @@ spec:
           - "{{ workflow.name }}"
           - "{{ execution.id }}"
           - "{{ execution.number }}"
-          - "{{ config.otlpEndpoint }}"

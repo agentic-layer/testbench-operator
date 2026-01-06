@@ -21,80 +21,211 @@ logging.basicConfig(level=logging.INFO)
 logger: Logger = logging.getLogger(__name__)
 
 
-def discover_metrics() -> tuple[dict[str, Metric], dict[str, type[Metric]]]:
-    """
-    Discover both pre-configured instances and metric classes from Ragas.
+class MetricsRegistry:
+    """Registry for RAGAS metrics discovery and management."""
 
-    Returns:
-        (instances, classes) where:
-        - instances: dict mapping names to pre-configured Metric instances
-        - classes: dict mapping class names to Metric class types
-    """
-    instances: dict[str, Metric] = {}
-    classes: dict[str, type[Metric]] = {}
+    def __init__(self):
+        """Initialize registry and discover available metrics."""
+        self._instances: dict[str, Metric] = {}
+        self._classes: dict[str, type[Metric]] = {}
+        self._discover_metrics()
 
-    # Iterate through all members of the metrics module
-    for name, obj in inspect.getmembers(metrics_module):
-        if name.startswith('_'):
-            continue
+    def _discover_metrics(self) -> None:
+        """
+        Discover both pre-configured instances and metric classes from Ragas.
 
-        # Check if it's a Metric class (but not base Metric)
-        if inspect.isclass(obj) and issubclass(obj, Metric) and obj is not Metric:
-            classes[name] = obj
-        # Check if it's a pre-configured metric instance
-        elif isinstance(obj, Metric):
-            metric_name = obj.name if hasattr(obj, 'name') else name
-            instances[metric_name] = obj
+        Populates _instances and _classes dictionaries.
+        """
+        for name, obj in inspect.getmembers(metrics_module):
+            if name.startswith("_"):
+                continue
 
-    return instances, classes
+            if inspect.isclass(obj) and issubclass(obj, Metric) and obj is not Metric:
+                self._classes[name] = obj
+            elif isinstance(obj, Metric):
+                metric_name = obj.name if hasattr(obj, "name") else name
+                self._instances[metric_name] = obj
 
+    def get_instance(self, name: str) -> Metric:
+        """
+        Get pre-configured metric instance by name.
 
-# Discover all available metric instances and classes
-AVAILABLE_METRIC_INSTANCES, AVAILABLE_METRIC_CLASSES = discover_metrics()
+        Args:
+            name: Instance name
 
+        Returns:
+            Metric instance
 
-def get_metric_by_name(metric_name: str) -> Metric:
-    """
-    Get a metric instance by name (checks instances first, then tries classes).
+        Raises:
+            ValueError: If instance not found
+        """
+        if name not in self._instances:
+            raise ValueError(
+                f"Unknown instance '{name}'.\n"
+                f"Available: {', '.join(sorted(self._instances.keys()))}"
+            )
+        return self._instances[name]
 
-    Args:
-        metric_name: Name of metric (e.g., "faithfulness", "answer_relevancy")
+    def get_class(self, name: str) -> type[Metric]:
+        """
+        Get metric class by name.
 
-    Returns:
-        Metric instance
+        Args:
+            name: Class name
 
-    Raises:
-        ValueError: If metric not found or can't be instantiated
-    """
-    # Try pre-configured instance first
-    if metric_name in AVAILABLE_METRIC_INSTANCES:
-        return AVAILABLE_METRIC_INSTANCES[metric_name]
+        Returns:
+            Metric class type
 
-    # Try to find class by name (case-insensitive matching)
-    for class_name, metric_class in AVAILABLE_METRIC_CLASSES.items():
-        if class_name.lower() == metric_name.lower():
+        Raises:
+            ValueError: If class not found
+        """
+        if name not in self._classes:
+            raise ValueError(
+                f"Unknown class '{name}'.\n"
+                f"Available: {', '.join(sorted(self._classes.keys()))}"
+            )
+        return self._classes[name]
+
+    def instantiate_class(self, class_name: str, parameters: dict[str, Any]) -> Metric:
+        """
+        Instantiate metric class with custom parameters.
+
+        Args:
+            class_name: Name of metric class
+            parameters: Dictionary of constructor parameters
+
+        Returns:
+            Metric instance
+
+        Raises:
+            ValueError: If class not found or instantiation fails
+        """
+        metric_class = self.get_class(class_name)
+
+        try:
+            return metric_class(**parameters)
+        except TypeError as e:
+            sig = inspect.signature(metric_class.__init__)
+            raise ValueError(
+                f"Invalid parameters for {class_name}: {e}\n"
+                f"Expected signature: {sig}"
+            )
+
+    def _load_metric_from_definition(self, metric_def: dict) -> Metric:
+        """
+        Load a single metric from its configuration definition.
+
+        Args:
+            metric_def: Dictionary containing metric definition
+
+        Returns:
+            Metric instance
+
+        Raises:
+            ValueError: If definition is invalid or metric can't be loaded
+        """
+        if "type" not in metric_def:
+            raise ValueError("Metric definition must include 'type' field")
+
+        metric_type = metric_def["type"]
+
+        if metric_type == "instance":
+            if "name" not in metric_def:
+                raise ValueError("Instance type requires 'name' field")
+            return self.get_instance(metric_def["name"])
+
+        elif metric_type == "class":
+            if "class_name" not in metric_def:
+                raise ValueError("Class type requires 'class_name' field")
+
+            class_name = metric_def["class_name"]
+            parameters = metric_def.get("parameters", {})
+            return self.instantiate_class(class_name, parameters)
+
+        else:
+            raise ValueError(
+                f"Unknown metric type '{metric_type}'.\n"
+                f"Supported types: 'instance', 'class'"
+            )
+
+    def load_from_config(self, config_path: str) -> list[Metric]:
+        """
+        Load metrics configuration from JSON or YAML file.
+
+        Args:
+            config_path: Path to configuration file (.json or .yaml/.yml)
+
+        Returns:
+            List of configured Metric instances
+
+        Raises:
+            ValueError: If config file invalid or metrics can't be loaded
+        """
+        if config_path.endswith(".json"):
+            with open(config_path, "r") as f:
+                config = json.load(f)
+        elif config_path.endswith((".yaml", ".yml")):
             try:
-                return metric_class()
-            except Exception as e:
+                import yaml
+            except ImportError:
                 raise ValueError(
-                    f"Metric class '{class_name}' requires parameters: {e}\n"
-                    f"Use --metrics-config to provide configuration."
+                    "YAML support requires 'pyyaml' package.\n"
+                    "Install with: uv add pyyaml\n"
+                    "Or use JSON format instead: metrics.json"
                 )
+            with open(config_path, "r") as f:
+                config = yaml.safe_load(f)
+        else:
+            raise ValueError(
+                f"Unsupported config file format: {config_path}\n"
+                f"Supported formats: .json, .yaml, .yml"
+            )
 
-    raise ValueError(
-        f"Unknown metric '{metric_name}'.\n"
-        f"Available instances: {', '.join(sorted(AVAILABLE_METRIC_INSTANCES.keys()))}\n"
-        f"Available classes: {', '.join(sorted(AVAILABLE_METRIC_CLASSES.keys()))}"
-    )
+        if "metrics" not in config:
+            raise ValueError("Config file must contain 'metrics' key")
+
+        if not isinstance(config["metrics"], list):
+            raise ValueError("'metrics' must be a list")
+
+        metrics: list[Metric] = []
+        for i, metric_def in enumerate(config["metrics"]):
+            try:
+                metric = self._load_metric_from_definition(metric_def)
+                metrics.append(metric)
+            except Exception as e:
+                raise ValueError(f"Error loading metric at index {i}: {e}")
+
+        if not metrics:
+            raise ValueError("Config file contains no valid metrics")
+
+        return metrics
+
+    def list_instances(self) -> list[str]:
+        """Return sorted list of available instance names."""
+        return sorted(self._instances.keys())
+
+    def list_classes(self) -> list[str]:
+        """Return sorted list of available class names."""
+        return sorted(self._classes.keys())
+
+    @classmethod
+    def create_default(cls) -> "MetricsRegistry":
+        """Factory method for default registry with auto-discovery."""
+        return cls()
 
 
-def instantiate_metric_from_class(class_name: str, parameters: dict[str, Any]) -> Metric:
+def instantiate_metric_from_class(
+    class_name: str,
+    parameters: dict[str, Any],
+    registry: MetricsRegistry | None = None
+) -> Metric:
     """
     Instantiate a metric class with custom parameters.
 
     Args:
-        class_name: Name of metric class (e.g., "AspectCritic")
+        class_name: Name of metric class
         parameters: Dictionary of constructor parameters
+        registry: Optional registry (None = create default)
 
     Returns:
         Metric instance
@@ -102,75 +233,22 @@ def instantiate_metric_from_class(class_name: str, parameters: dict[str, Any]) -
     Raises:
         ValueError: If class not found or instantiation fails
     """
-    if class_name not in AVAILABLE_METRIC_CLASSES:
-        raise ValueError(
-            f"Unknown metric class '{class_name}'.\n"
-            f"Available classes: {', '.join(sorted(AVAILABLE_METRIC_CLASSES.keys()))}"
-        )
+    if registry is None:
+        registry = MetricsRegistry.create_default()
 
-    metric_class = AVAILABLE_METRIC_CLASSES[class_name]
-
-    try:
-        return metric_class(**parameters)
-    except TypeError as e:
-        # Extract signature for helpful error message
-        sig = inspect.signature(metric_class.__init__)
-        raise ValueError(f"Invalid parameters for {class_name}: {e}\n" f"Expected signature: {sig}")
+    return registry.instantiate_class(class_name, parameters)
 
 
-def _load_metric_from_definition(metric_def: dict) -> Metric:
-    """
-    Load a single metric from its configuration definition.
-
-    Args:
-        metric_def: Dictionary containing metric definition
-
-    Returns:
-        Metric instance
-
-    Raises:
-        ValueError: If definition is invalid or metric can't be loaded
-    """
-    # Validate required fields
-    if 'type' not in metric_def:
-        raise ValueError("Metric definition must include 'type' field")
-
-    metric_type = metric_def['type']
-
-    if metric_type == 'instance':
-        # Load pre-configured instance
-        if 'name' not in metric_def:
-            raise ValueError("Instance type requires 'name' field")
-
-        name = metric_def['name']
-        if name not in AVAILABLE_METRIC_INSTANCES:
-            raise ValueError(
-                f"Unknown instance '{name}'.\n"
-                f"Available: {', '.join(sorted(AVAILABLE_METRIC_INSTANCES.keys()))}"
-            )
-
-        return AVAILABLE_METRIC_INSTANCES[name]
-
-    elif metric_type == 'class':
-        # Instantiate class with parameters
-        if 'class_name' not in metric_def:
-            raise ValueError("Class type requires 'class_name' field")
-
-        class_name = metric_def['class_name']
-        parameters = metric_def.get('parameters', {})
-
-        return instantiate_metric_from_class(class_name, parameters)
-
-    else:
-        raise ValueError(f"Unknown metric type '{metric_type}'.\n" f"Supported types: 'instance', 'class'")
-
-
-def load_metrics_config(config_path: str) -> list[Metric]:
+def load_metrics_config(
+    config_path: str,
+    registry: MetricsRegistry | None = None
+) -> list[Metric]:
     """
     Load metrics configuration from JSON or YAML file.
 
     Args:
-        config_path: Path to configuration file (.json or .yaml/.yml)
+        config_path: Path to configuration file
+        registry: Optional registry (None = create default)
 
     Returns:
         List of configured Metric instances
@@ -178,46 +256,10 @@ def load_metrics_config(config_path: str) -> list[Metric]:
     Raises:
         ValueError: If config file invalid or metrics can't be loaded
     """
-    # Determine file format and load
-    if config_path.endswith('.json'):
-        with open(config_path, 'r') as f:
-            config = json.load(f)
-    elif config_path.endswith(('.yaml', '.yml')):
-        try:
-            import yaml
-        except ImportError:
-            raise ValueError(
-                "YAML support requires 'pyyaml' package.\n"
-                "Install with: uv add pyyaml\n"
-                "Or use JSON format instead: metrics.json"
-            )
-        with open(config_path, 'r') as f:
-            config = yaml.safe_load(f)
-    else:
-        raise ValueError(
-            f"Unsupported config file format: {config_path}\n" f"Supported formats: .json, .yaml, .yml"
-        )
+    if registry is None:
+        registry = MetricsRegistry.create_default()
 
-    # Validate config structure
-    if 'metrics' not in config:
-        raise ValueError("Config file must contain 'metrics' key")
-
-    if not isinstance(config['metrics'], list):
-        raise ValueError("'metrics' must be a list")
-
-    # Load each metric
-    metrics: list[Metric] = []
-    for i, metric_def in enumerate(config['metrics']):
-        try:
-            metric = _load_metric_from_definition(metric_def)
-            metrics.append(metric)
-        except Exception as e:
-            raise ValueError(f"Error loading metric at index {i}: {e}")
-
-    if not metrics:
-        raise ValueError("Config file contains no valid metrics")
-
-    return metrics
+    return registry.load_from_config(config_path)
 
 
 @dataclass
@@ -321,7 +363,7 @@ def main(
         cost_per_input_token: Cost per input token
         cost_per_output_token: Cost per output token
     """
-    # Load metrics from configuration file
+    # Load metrics from configuration file (creates registry internally)
     logger.info(f"Loading metrics from config: {metrics_config}")
     metrics = load_metrics_config(metrics_config)
     logger.info(f"Loaded {len(metrics)} metrics: {', '.join([m.name for m in metrics])}")
@@ -376,16 +418,19 @@ def main(
 
 
 if __name__ == "__main__":
+    # Create registry for help text generation
+    registry = MetricsRegistry.create_default()
+
     # Parse the parameters (model and metrics-config) evaluate.py was called with
     parser = argparse.ArgumentParser(
         description="Evaluate results using RAGAS metrics via configuration file",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=f"""
 Available metric instances (pre-configured):
-  {', '.join(sorted(AVAILABLE_METRIC_INSTANCES.keys()))}
+  {', '.join(registry.list_instances())}
 
 Available metric classes (configurable via --metrics-config):
-  {', '.join(sorted(AVAILABLE_METRIC_CLASSES.keys()))}
+  {', '.join(registry.list_classes())}
 
 Examples:
   python3 scripts/evaluate.py gemini-2.5-flash-lite --metrics-config examples/metrics_simple.json
