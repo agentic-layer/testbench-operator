@@ -68,6 +68,51 @@ uv run python3 scripts/evaluate.py gemini-2.5-flash-lite
 
 # Phase 4: Publish metrics to OTLP endpoint (requires execution_id and execution_number)
 OTEL_EXPORTER_OTLP_ENDPOINT="http://localhost:4318" uv run python3 scripts/publish.py "workflow-name" "exec-001" 1
+
+# Optional: Generate HTML visualization report (requires workflow metadata)
+uv run python3 scripts/visualize.py "weather-assistant-test" "exec-001" 1
+```
+
+### HTML Visualization
+
+Generate a comprehensive HTML dashboard from evaluation results for local viewing and sharing.
+
+**BREAKING CHANGE:** visualize.py now requires workflow metadata as mandatory positional arguments (matching publish.py pattern).
+
+```shell
+# Basic usage (after running evaluate.py)
+uv run python3 scripts/visualize.py weather-assistant-test exec-001 1
+
+# Custom input/output paths
+uv run python3 scripts/visualize.py weather-assistant-test exec-001 1 \
+  --input data/results/evaluation_scores.json \
+  --output reports/exec-001.html
+
+# Complete pipeline example
+uv run python3 scripts/evaluate.py gemini-2.5-flash-lite
+uv run python3 scripts/visualize.py weather-agent exec-123 5
+```
+
+**Required Arguments:**
+- `workflow_name` - Name of the test workflow (e.g., 'weather-assistant-test')
+- `execution_id` - Testkube execution ID for this workflow run
+- `execution_number` - Testkube execution number for this workflow run
+
+**Optional Arguments:**
+- `--input` - Path to evaluation_scores.json (default: `data/results/evaluation_scores.json`)
+- `--output` - Path for output HTML file (default: `data/results/evaluation_report.html`)
+
+**Features:**
+- **Summary Cards**: Total samples, metrics count, token usage, cost
+- **Workflow Metadata**: Displays workflow name, execution ID, and execution number
+- **Overall Scores Chart**: Horizontal bar chart showing mean score per metric
+- **Metric Distributions**: Histograms showing score distributions with statistics
+- **Detailed Results Table**: All samples with metrics, searchable and sortable
+- **Multi-Turn Support**: Chat-bubble visualization for conversational datasets
+- **Self-Contained HTML**: Single file with embedded Chart.js, works offline
+- **Responsive Design**: Works on desktop and tablet, print-friendly
+
+**Output:** `data/results/evaluation_report.html` (default)
 ```
 
 ### Metrics Configuration
@@ -235,6 +280,13 @@ make run
 - **Output**: Metrics published to OTLP endpoint (configured via `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable)
 - **Purpose**: Sends evaluation results to observability backend (LGTM/Grafana) via OpenTelemetry
 
+**Optional: Visualize** (`scripts/visualize.py`)
+- **Input**: `data/results/evaluation_scores.json`
+- **Output**: `data/results/evaluation_report.html` (self-contained HTML dashboard)
+- **Purpose**: Generates comprehensive HTML report with charts, tables, and statistics for local viewing and sharing
+- **Features**: Summary cards, bar charts, metric distributions, searchable results table
+- **Note**: Runs independently of Phase 4 (publish.py), can be used for local development without OTLP backend
+
 ### Data Flow
 
 ```
@@ -245,8 +297,10 @@ data/datasets/ragas_dataset.jsonl
 data/experiments/ragas_experiment.jsonl
   ↓ [evaluate.py + RAGAS + AI Gateway]
 data/results/evaluation_scores.json
-  ↓ [publish.py + OTLP]
-Observability Backend (Grafana)
+  ├─→ [publish.py + OTLP]
+  │   Observability Backend (Grafana)
+  └─→ [visualize.py]
+      data/results/evaluation_report.html (Local Visualization)
 ```
 
 ### Kubernetes Integration (Testkube)
@@ -346,10 +400,17 @@ All scripts follow same pattern: parse arguments → read input file(s) → proc
   - Sends via HTTP to OTLP collector
   - Uses workflow name as metric label
 
+- **`visualize.py`**: HTML visualization generation
+  - Reads `evaluation_scores.json` and generates self-contained HTML dashboard
+  - Creates summary cards, bar charts, metric distributions, and results table
+  - Uses Chart.js via CDN for interactive visualizations
+  - Inline CSS for single-file distribution
+  - Includes search functionality for results table
+
 ### Test Organization
 
 **Unit Tests (`tests/`)**:
-- One test file per script: `test_setup.py`, `test_run.py`, `test_evaluate.py`, `test_publish.py`
+- One test file per script: `test_setup.py`, `test_run.py`, `test_evaluate.py`, `test_publish.py`, `test_visualize.py`
 - Uses pytest with async support (`pytest-asyncio`)
 - Mocks external dependencies: HTTP requests (`httpx.AsyncClient`), A2A client, RAGAS framework
 - Uses `tmp_path` fixture for file I/O testing

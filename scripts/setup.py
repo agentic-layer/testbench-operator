@@ -1,12 +1,11 @@
 import argparse
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Callable, cast
+from typing import Callable
 
 import pandas as pd
 import requests
 from pandas import DataFrame
-from pydantic import BaseModel
 from ragas import Dataset
 from requests import Response
 

@@ -1,0 +1,22 @@
+apiVersion: testworkflows.testkube.io/v1
+kind: TestWorkflowTemplate
+metadata:
+  name: ragas-visualize-template
+  namespace: testkube
+  labels:
+    testkube.io/test-category: ragas-evaluation
+    app: testworkflows
+
+spec:
+  # Steps to execute
+  steps:
+    - name: visualize-metrics
+      artifacts:
+        paths:
+          - "data/results/evaluation_report.html"
+      run:
+        args:
+          - visualize.py
+          - "{{ workflow.name }}"
+          - "{{ execution.id }}"
+          - "{{ execution.number }}"

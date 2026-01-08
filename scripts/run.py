@@ -273,7 +273,6 @@ async def multi_turn_experiment(row, agent_url: str, workflow_name: str) -> dict
                         turn_span.set_attribute("turn.index", turn_idx + 1)
                         turn_span.set_attribute("turn.content", human_msg["content"])
 
-
                         # Create A2A message
                         message = Message(
                             role=Role.user,
