@@ -60,10 +60,7 @@ class MetricsRegistry:
             ValueError: If instance not found
         """
         if name not in self._instances:
-            raise ValueError(
-                f"Unknown instance '{name}'.\n"
-                f"Available: {', '.join(sorted(self._instances.keys()))}"
-            )
+            raise ValueError(f"Unknown instance '{name}'.\nAvailable: {', '.join(sorted(self._instances.keys()))}")
         return self._instances[name]
 
     def get_class(self, name: str) -> type[Metric]:
@@ -80,10 +77,7 @@ class MetricsRegistry:
             ValueError: If class not found
         """
         if name not in self._classes:
-            raise ValueError(
-                f"Unknown class '{name}'.\n"
-                f"Available: {', '.join(sorted(self._classes.keys()))}"
-            )
+            raise ValueError(f"Unknown class '{name}'.\nAvailable: {', '.join(sorted(self._classes.keys()))}")
         return self._classes[name]
 
     def instantiate_class(self, class_name: str, parameters: dict[str, Any]) -> Metric:
@@ -106,10 +100,7 @@ class MetricsRegistry:
             return metric_class(**parameters)
         except TypeError as e:
             sig = inspect.signature(metric_class.__init__)
-            raise ValueError(
-                f"Invalid parameters for {class_name}: {e}\n"
-                f"Expected signature: {sig}"
-            )
+            raise ValueError(f"Invalid parameters for {class_name}: {e}\nExpected signature: {sig}")
 
     def _load_metric_from_definition(self, metric_def: dict) -> Metric:
         """
@@ -143,10 +134,7 @@ class MetricsRegistry:
             return self.instantiate_class(class_name, parameters)
 
         else:
-            raise ValueError(
-                f"Unknown metric type '{metric_type}'.\n"
-                f"Supported types: 'instance', 'class'"
-            )
+            raise ValueError(f"Unknown metric type '{metric_type}'.\nSupported types: 'instance', 'class'")
 
     def load_from_config(self, config_path: str) -> list[Metric]:
         """
@@ -176,10 +164,7 @@ class MetricsRegistry:
             with open(config_path, "r") as f:
                 config = yaml.safe_load(f)
         else:
-            raise ValueError(
-                f"Unsupported config file format: {config_path}\n"
-                f"Supported formats: .json, .yaml, .yml"
-            )
+            raise ValueError(f"Unsupported config file format: {config_path}\nSupported formats: .json, .yaml, .yml")
 
         if "metrics" not in config:
             raise ValueError("Config file must contain 'metrics' key")
@@ -215,9 +200,7 @@ class MetricsRegistry:
 
 
 def instantiate_metric_from_class(
-    class_name: str,
-    parameters: dict[str, Any],
-    registry: MetricsRegistry | None = None
+    class_name: str, parameters: dict[str, Any], registry: MetricsRegistry | None = None
 ) -> Metric:
     """
     Instantiate a metric class with custom parameters.
@@ -239,10 +222,7 @@ def instantiate_metric_from_class(
     return registry.instantiate_class(class_name, parameters)
 
 
-def load_metrics_config(
-    config_path: str,
-    registry: MetricsRegistry | None = None
-) -> list[Metric]:
+def load_metrics_config(config_path: str, registry: MetricsRegistry | None = None) -> list[Metric]:
     """
     Load metrics configuration from JSON or YAML file.
 
@@ -427,10 +407,10 @@ if __name__ == "__main__":
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=f"""
 Available metric instances (pre-configured):
-  {', '.join(registry.list_instances())}
+  {", ".join(registry.list_instances())}
 
 Available metric classes (configurable via --metrics-config):
-  {', '.join(registry.list_classes())}
+  {", ".join(registry.list_classes())}
 
 Examples:
   python3 scripts/evaluate.py gemini-2.5-flash-lite --metrics-config examples/metrics_simple.json

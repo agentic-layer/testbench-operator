@@ -303,10 +303,7 @@ def test_main_successful_execution(experiment_data, monkeypatch, tmp_path):
 
         # Create config file
         config_file = tmp_path / "test_metrics.json"
-        config = {
-            "version": "1.0",
-            "metrics": [{"type": "instance", "name": "test_metric"}]
-        }
+        config = {"version": "1.0", "metrics": [{"type": "instance", "name": "test_metric"}]}
 
         with open(config_file, "w") as f:
             json.dump(config, f)
@@ -440,9 +437,7 @@ def test_instantiate_metric_from_class_invalid_params(default_registry):
     class_name = classes[0]
     with pytest.raises(ValueError, match="Invalid parameters"):
         instantiate_metric_from_class(
-            class_name,
-            {"completely_invalid_param_name_xyz": "value"},
-            registry=default_registry
+            class_name, {"completely_invalid_param_name_xyz": "value"}, registry=default_registry
         )
 
 
@@ -456,10 +451,7 @@ def test_load_metrics_config_json(tmp_path, default_registry):
     config_file = tmp_path / "metrics.json"
     metric_name = instances[0]
 
-    config = {
-        "version": "1.0",
-        "metrics": [{"type": "instance", "name": metric_name}]
-    }
+    config = {"version": "1.0", "metrics": [{"type": "instance", "name": metric_name}]}
 
     with open(config_file, "w") as f:
         json.dump(config, f)
@@ -602,10 +594,7 @@ def test_registry_load_from_config(tmp_path, default_registry):
         pytest.skip("No instances available")
 
     config_file = tmp_path / "test.json"
-    config = {
-        "version": "1.0",
-        "metrics": [{"type": "instance", "name": instances[0]}]
-    }
+    config = {"version": "1.0", "metrics": [{"type": "instance", "name": instances[0]}]}
 
     with open(config_file, "w") as f:
         json.dump(config, f)

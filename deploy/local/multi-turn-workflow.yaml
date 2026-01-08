@@ -52,6 +52,6 @@ spec:
             metricsConfigPath: "/app/config/metrics.yaml"
 
     # Step 4: Publish - Push metrics to OTLP
-    - name: publish
+    - name: visualize
       use:
-        - name: ragas-publish-template
+        - name: ragas-visualize-template
