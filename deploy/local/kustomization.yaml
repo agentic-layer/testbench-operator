@@ -3,7 +3,7 @@ kind: Kustomization
 resources:
   - lgtm/
   - weather-agent.yaml
-  - data-server/
+  - dataset.yaml
   - ../base
   - multi-turn-metrics-configmap.yaml
   - multi-turn-workflow.yaml
