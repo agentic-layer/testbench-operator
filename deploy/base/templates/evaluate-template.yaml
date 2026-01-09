@@ -24,6 +24,9 @@ spec:
   # Steps to execute
   steps:
     - name: evaluate-results
+      artifacts:
+        paths:
+          - "data/results/evaluation_scores.json"
       run:
         command:
           - sh
