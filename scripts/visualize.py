@@ -758,6 +758,9 @@ def generate_samples_table_html(chart_data: dict[str, Any]) -> str:
     if chart_data["samples"] and chart_data["samples"][0]["metrics"]:
         metric_names = sorted(chart_data["samples"][0]["metrics"].keys())
 
+    # Check if any sample has response data
+    has_responses = any(sample.get("response") for sample in chart_data["samples"])
+
     # Generate table header
     html = """
 <section class="table-section">
@@ -771,8 +774,11 @@ def generate_samples_table_html(chart_data: dict[str, Any]) -> str:
                 <tr>
                     <th>#</th>
                     <th>User Input</th>
-                    <th>Response</th>
 """
+
+    # Add Response column header only if there's response data
+    if has_responses:
+        html += "                    <th>Response</th>\n"
 
     # Add metric columns
     for metric_name in metric_names:
@@ -817,8 +823,12 @@ def generate_samples_table_html(chart_data: dict[str, Any]) -> str:
         html += f"""                <tr>
                     <td>{sample["index"]}</td>
                     <td class="user-input-cell" title="{tooltip_text}">{user_input_display}</td>
-                    <td class="response-cell" title="{sample["response"]}">{sample["response"]}</td>
 """
+
+        # Add response cell only if we have response data
+        if has_responses:
+            response = sample.get("response", "")
+            html += f'                    <td class="response-cell" title="{response}">{response}</td>\n'
 
         # Add metric values
         for metric_name in metric_names:
