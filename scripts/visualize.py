@@ -1,4 +1,5 @@
 import argparse
+import html
 import json
 import logging
 import math
@@ -132,24 +133,60 @@ def calculate_metric_statistics(individual_results: list[dict[str, Any]], metric
     return stats
 
 
-def _format_multi_turn_conversation(conversation: list[dict[str, str]]) -> str:
+def _format_multi_turn_conversation(conversation: list[dict[str, Any]]) -> str:
     """
-    Format a multi-turn conversation as HTML.
+    Format a multi-turn conversation as HTML with support for tool calls.
 
     Args:
-        conversation: List of message dicts with 'content' and 'type' fields
+        conversation: List of message dicts with 'content', 'type', and optional 'tool_calls' fields
 
     Returns:
         Formatted HTML string
     """
-    html = '<div class="conversation">'
+    html_output = '<div class="conversation">'
     for msg in conversation:
         msg_type = msg.get("type", "unknown")
         content = msg.get("content", "")
-        css_class = "human" if msg_type == "human" else "ai"
-        html += f'<div class="message {css_class}"><strong>{msg_type.upper()}:</strong> {content}</div>'
-    html += "</div>"
-    return html
+        tool_calls = msg.get("tool_calls", [])
+
+        # Determine CSS class based on message type
+        if msg_type == "human":
+            css_class = "human"
+            label = "HUMAN"
+        elif msg_type == "tool":
+            css_class = "tool"
+            label = "TOOL"
+        else:  # ai
+            css_class = "ai"
+            label = "AI"
+
+        html_output += f'<div class="message {css_class}">'
+        html_output += f'<strong>{label}:</strong> '
+
+        # If AI message has tool calls, display them
+        if tool_calls:
+            html_output += '<div class="tool-calls-container">'
+            for tool_call in tool_calls:
+                tool_name = tool_call.get("name", "unknown")
+                tool_args = tool_call.get("args", {})
+                # Format args as JSON for readability
+                args_str = json.dumps(tool_args, indent=2)
+                html_output += f'<div class="tool-call">'
+                html_output += f'<span class="tool-call-name">→ Tool: {tool_name}</span>'
+                html_output += f'<pre class="tool-call-args">{args_str}</pre>'
+                html_output += '</div>'
+            html_output += '</div>'
+
+        # Display content if not empty
+        if content:
+            # Escape HTML to prevent injection and preserve formatting
+            escaped_content = html.escape(content)
+            html_output += f'<span class="message-content">{escaped_content}</span>'
+
+        html_output += '</div>'
+
+    html_output += "</div>"
+    return html_output
 
 
 def _is_multi_turn_conversation(user_input: Any) -> bool:
@@ -531,6 +568,51 @@ tbody td:first-child {
     align-self: flex-end;
 }
 
+.conversation .message.tool {
+    background-color: #fff3cd;
+    border-left: 3px solid #ffc107;
+    align-self: center;
+    max-width: 95%;
+}
+
+.tool-calls-container {
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.tool-call {
+    background-color: rgba(255, 255, 255, 0.5);
+    padding: 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.tool-call-name {
+    display: block;
+    font-weight: bold;
+    color: #5d4037;
+    margin-bottom: 4px;
+    font-size: 0.8rem;
+}
+
+.tool-call-args {
+    background-color: #f5f5f5;
+    padding: 6px;
+    border-radius: 3px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.75rem;
+    margin: 0;
+    overflow-x: auto;
+    border: 1px solid #e0e0e0;
+}
+
+.message-content {
+    display: block;
+    margin-top: 4px;
+}
+
 .conversation .message strong {
     display: block;
     font-size: 0.75rem;
@@ -709,9 +791,26 @@ def generate_samples_table_html(chart_data: dict[str, Any]) -> str:
 
         # For tooltips and search, we need plain text version
         if sample.get("is_multi_turn"):
-            # Extract text content from conversation for tooltip
             conversation = sample["user_input"]
-            tooltip_text = " | ".join([f"{msg['type']}: {msg['content']}" for msg in conversation])
+            tooltip_parts = []
+            for msg in conversation:
+                msg_type = msg.get("type", "unknown")
+                content = msg.get("content", "")
+                tool_calls = msg.get("tool_calls", [])
+
+                if tool_calls:
+                    # For AI messages with tool calls, show tool names
+                    tool_names = ", ".join([tc.get("name", "unknown") for tc in tool_calls])
+                    tooltip_parts.append(f"{msg_type}: [calls: {tool_names}]")
+                elif content:
+                    # For messages with content, show truncated content
+                    truncated = content[:50] + "..." if len(content) > 50 else content
+                    tooltip_parts.append(f"{msg_type}: {truncated}")
+                else:
+                    # Empty message (shouldn't happen, but handle gracefully)
+                    tooltip_parts.append(f"{msg_type}: (empty)")
+
+            tooltip_text = " | ".join(tooltip_parts)
         else:
             tooltip_text = str(sample["user_input"])
 

@@ -19,56 +19,10 @@ from opentelemetry.trace import Status, StatusCode
 from otel_setup import setup_otel
 from pydantic import BaseModel
 from ragas import Dataset, experiment
-from ragas.messages import AIMessage, HumanMessage, ToolCall
 
 # Set up module-level logger
 logging.basicConfig(level=logging.INFO)
 logger: Logger = logging.getLogger(__name__)
-
-
-def a2a_message_to_ragas(message: Message) -> HumanMessage | AIMessage:
-    """
-    Convert A2A Message to RAGAS message format.
-
-    Handles:
-    - Text extraction from multiple parts
-    - Role mapping (user → human, agent → ai)
-    - Tool call extraction from metadata
-    - Metadata preservation
-
-    Args:
-        message: A2A Message object
-
-    Returns:
-        HumanMessage or AIMessage
-
-    Raises:
-        ValueError: If role is not user or agent
-    """
-    # Extract text from all TextPart objects
-    text_parts = []
-    for part in message.parts:
-        # Part is a wrapper - access the actual part inside
-        actual_part = part.root if hasattr(part, "root") else part
-        if hasattr(actual_part, "text"):
-            text_parts.append(actual_part.text)
-
-    content = " ".join(text_parts) if text_parts else ""
-
-    # Map role
-    if message.role == Role.user:
-        return HumanMessage(content=content, metadata=message.metadata)
-    elif message.role == Role.agent:
-        # Extract tool calls from metadata if present
-        tool_calls = None
-        if message.metadata and "tool_calls" in message.metadata:
-            # Parse tool calls from metadata
-            tool_calls_data = message.metadata["tool_calls"]
-            tool_calls = [ToolCall(name=tc["name"], args=tc["args"]) for tc in tool_calls_data]
-
-        return AIMessage(content=content, metadata=message.metadata, tool_calls=tool_calls)
-    else:
-        raise ValueError(f"Unsupported message role: {message.role}")
 
 
 def validate_multi_turn_input(user_input: list) -> list[dict]:
@@ -264,6 +218,7 @@ async def multi_turn_experiment(row, agent_url: str, workflow_name: str) -> dict
 
                 context_id = None
                 conversation_messages = []
+                seen_message_ids = set()  # Track message_ids to avoid duplicates across all turns
 
                 # Sequentially query agent for each human turn
                 for turn_idx, human_msg in enumerate(human_messages):
@@ -280,35 +235,106 @@ async def multi_turn_experiment(row, agent_url: str, workflow_name: str) -> dict
                             message_id=uuid4().hex,
                             context_id=context_id,  # None for first turn, preserved after
                         )
-                        conversation_messages.append({"content": human_msg["content"], "type": "human"})
 
                         logger.info(f"Turn {turn_idx + 1}/{len(human_messages)}: {human_msg['content']}")
 
                         # Send message and get response
-                        agent_response_text = ""
+                        turn_task = None
                         async for response in client.send_message(message):
                             if isinstance(response, tuple):
                                 task, _ = response
                                 if task:
+                                    turn_task = task
+
                                     # Capture context_id from first response
                                     if not context_id:
                                         context_id = task.context_id
                                         logger.info(f"Captured context_id: {context_id}")
                                         span.set_attribute("conversation.context_id", context_id)
 
-                                    # Extract agent response from artifacts (same approach as single_turn_experiment)
-                                    artifacts: list = task.model_dump(mode="json", include={"artifacts"}).get(
-                                        "artifacts", []
-                                    )
-                                    if artifacts and artifacts[0].get("parts"):
-                                        agent_response_text = artifacts[0]["parts"][0].get("text", "")
+                        # Process this turn's history immediately
+                        if turn_task and hasattr(turn_task, 'history') and turn_task.history:
+                            for msg in turn_task.history:
+                                # Skip duplicate messages
+                                if msg.message_id in seen_message_ids:
+                                    logger.debug(f"Skipping duplicate message_id: {msg.message_id}")
+                                    continue
+                                seen_message_ids.add(msg.message_id)
 
-                        # Add agent response to conversation
-                        if agent_response_text:
-                            conversation_messages.append({"content": agent_response_text, "type": "ai"})
-                            logger.info(f"Agent response: {agent_response_text[:100]}...")
+                                if msg.role == Role.user:
+                                    # Extract user message text
+                                    text_parts = []
+                                    for part in msg.parts:
+                                        actual_part = part.root if hasattr(part, "root") else part
+                                        if hasattr(actual_part, "text"):
+                                            text_parts.append(actual_part.text)
+                                    content = " ".join(text_parts) if text_parts else ""
+                                    conversation_messages.append({"content": content, "type": "human"})
+
+                                elif msg.role == Role.agent:
+                                    # Process agent messages
+                                    tool_calls_in_msg = []
+                                    tool_responses_in_msg = []
+                                    text_content = ""
+
+                                    # Strategy 1: Check message metadata for tool calls
+                                    if msg.metadata and "tool_calls" in msg.metadata:
+                                        metadata_tool_calls = msg.metadata.get("tool_calls", [])
+                                        if isinstance(metadata_tool_calls, list):
+                                            tool_calls_in_msg.extend(metadata_tool_calls)
+
+                                    # Strategy 2: Check parts for DataParts and TextParts
+                                    for part in msg.parts:
+                                        actual_part = part.root if hasattr(part, "root") else part
+
+                                        # Check for TextPart (final response)
+                                        if hasattr(actual_part, "text"):
+                                            text_content = actual_part.text
+
+                                        # Check for DataPart (tool calls or responses)
+                                        elif (hasattr(actual_part, "kind") and actual_part.kind == "data" and
+                                              hasattr(actual_part, "data") and isinstance(actual_part.data, dict) and
+                                              "name" in actual_part.data):
+
+                                            # Tool call: has args, not response
+                                            if "args" in actual_part.data and "response" not in actual_part.data:
+                                                tool_calls_in_msg.append({
+                                                    "name": actual_part.data.get("name"),
+                                                    "args": actual_part.data.get("args", {})
+                                                })
+
+                                            # Tool response: has response, not args
+                                            elif "response" in actual_part.data and "args" not in actual_part.data:
+                                                tool_response_data = actual_part.data.get("response", {})
+                                                # Keep as dict/string representation
+                                                response_content = str(tool_response_data)
+                                                tool_responses_in_msg.append({
+                                                    "content": response_content,
+                                                    "type": "tool"
+                                                })
+
+                                    # Add AI message with tool calls (if any) - with empty content
+                                    if tool_calls_in_msg:
+                                        conversation_messages.append({
+                                            "content": "",
+                                            "type": "ai",
+                                            "tool_calls": tool_calls_in_msg
+                                        })
+                                        logger.info(f"Extracted {len(tool_calls_in_msg)} tool call(s)")
+
+                                    # Add tool response messages (if any)
+                                    if tool_responses_in_msg:
+                                        conversation_messages.extend(tool_responses_in_msg)
+                                        logger.info(f"Extracted {len(tool_responses_in_msg)} tool response(s)")
+
+                                    # Add AI message with text content (if any)
+                                    if text_content:
+                                        conversation_messages.append({
+                                            "content": text_content,
+                                            "type": "ai"
+                                        })
                         else:
-                            logger.warning(f"Empty agent response for turn {turn_idx + 1}")
+                            logger.warning(f"Turn {turn_idx + 1}: task.history not available")
 
                 # Validate we got responses
                 if len(conversation_messages) < 2:

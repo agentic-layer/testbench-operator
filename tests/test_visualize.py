@@ -651,3 +651,93 @@ def test_html_with_multi_turn_conversations(temp_dir):
     assert "Question 2" in html_content
     assert "HUMAN:" in html_content
     assert "AI:" in html_content
+
+
+def test_format_multi_turn_conversation_with_tool_calls():
+    """Test formatting conversations with tool calls"""
+    from visualize import _format_multi_turn_conversation
+
+    conversation = [
+        {"content": "What's the weather?", "type": "human"},
+        {
+            "content": "",
+            "type": "ai",
+            "tool_calls": [{"name": "get_weather", "args": {"city": "NYC"}}]
+        },
+        {"content": "{'status': 'success', 'report': 'Sunny, 72F'}", "type": "tool"},
+        {"content": "The weather is sunny.", "type": "ai"}
+    ]
+
+    html = _format_multi_turn_conversation(conversation)
+
+    # Verify structure
+    assert '<div class="conversation">' in html
+    assert '<div class="message human">' in html
+    assert '<div class="message tool">' in html
+    assert '<div class="message ai">' in html
+
+    # Verify tool call display
+    assert "tool-calls-container" in html
+    assert "tool-call-name" in html
+    assert "get_weather" in html
+    assert '"city": "NYC"' in html or "city" in html  # JSON formatting
+
+    # Verify labels
+    assert "HUMAN:" in html
+    assert "AI:" in html
+    assert "TOOL:" in html
+
+
+def test_format_multi_turn_conversation_with_multiple_tool_calls():
+    """Test formatting AI message with multiple tool calls"""
+    from visualize import _format_multi_turn_conversation
+
+    conversation = [
+        {"content": "Check weather and time", "type": "human"},
+        {
+            "content": "",
+            "type": "ai",
+            "tool_calls": [
+                {"name": "get_weather", "args": {"city": "NYC"}},
+                {"name": "get_time", "args": {"city": "NYC"}}
+            ]
+        }
+    ]
+
+    html = _format_multi_turn_conversation(conversation)
+
+    # Should have multiple tool call boxes
+    assert html.count("tool-call-name") == 2
+    assert "get_weather" in html
+    assert "get_time" in html
+
+
+def test_prepare_chart_data_with_tool_calls():
+    """Test prepare_chart_data handles tool calls in user_input"""
+    from visualize import prepare_chart_data, VisualizationData
+
+    viz_data = VisualizationData(
+        overall_scores={"metric1": 0.85},
+        individual_results=[
+            {
+                "user_input": [
+                    {"content": "test", "type": "human"},
+                    {"content": "", "type": "ai", "tool_calls": [{"name": "tool1", "args": {}}]}
+                ],
+                "response": "",
+                "metric1": 0.85,
+                "trace_id": "trace1"
+            }
+        ],
+        total_tokens={"input_tokens": 100, "output_tokens": 50},
+        total_cost=0.01,
+        metric_names=["metric1"]
+    )
+
+    chart_data = prepare_chart_data(viz_data)
+
+    # Verify sample has is_multi_turn and formatted HTML
+    assert len(chart_data["samples"]) == 1
+    sample = chart_data["samples"][0]
+    assert sample["is_multi_turn"] is True
+    assert "tool-call" in sample["user_input_formatted"]
