@@ -111,54 +111,43 @@ def test_creates_ragas_dataset_file(temp_dir):
 
 # TestMain tests
 def test_main_with_csv(temp_dir, monkeypatch):
-    """Test main function with CSV file"""
+    """Test main function with CSV file from S3"""
 
     tmp, original_cwd = temp_dir
     os.chdir(tmp)
 
     try:
-        # Mock the HTTP response
+        # Mock S3 response
         csv_content = b"user_input,retrieved_contexts,reference\n"
         csv_content += b'"Question?","Context text","Answer"\n'
 
-        class MockResponse:
-            def __init__(self):
-                self.content = csv_content
+        class MockS3Client:
+            def get_object(self, Bucket, Key):  # noqa: N803
+                return {"Body": BytesIO(csv_content)}
 
-            def raise_for_status(self):
-                pass
+        def mock_create_s3_client():
+            return MockS3Client()
 
-        calls = []
+        monkeypatch.setattr("setup.create_s3_client", mock_create_s3_client)
 
-        def mock_get(url, timeout=None):
-            calls.append({"url": url, "timeout": timeout})
-            return MockResponse()
-
-        monkeypatch.setattr("setup.requests.get", mock_get)
-
-        # Run main
-        main("https://example.com/data.csv")
+        # Run main with bucket and key
+        main("test-bucket", "data.csv")
 
         # Verify dataset was created in datasets subdirectory
         dataset_file = Path(tmp) / "data" / "datasets" / "ragas_dataset.jsonl"
         assert dataset_file.exists(), f"Dataset file not found at {dataset_file}"
-
-        # Verify requests.get was called correctly
-        assert len(calls) == 1
-        assert calls[0]["url"] == "https://example.com/data.csv"
-        assert calls[0]["timeout"] == 20
     finally:
         os.chdir(original_cwd)
 
 
 def test_main_with_json(temp_dir, monkeypatch):
-    """Test main function with JSON file"""
+    """Test main function with JSON file from S3"""
 
     tmp, original_cwd = temp_dir
     os.chdir(tmp)
 
     try:
-        # Mock the HTTP response
+        # Mock S3 response
         json_content = b"""[
             {
                 "user_input": "Question?",
@@ -167,20 +156,17 @@ def test_main_with_json(temp_dir, monkeypatch):
             }
         ]"""
 
-        class MockResponse:
-            def __init__(self):
-                self.content = json_content
+        class MockS3Client:
+            def get_object(self, Bucket, Key):  # noqa: N803
+                return {"Body": BytesIO(json_content)}
 
-            def raise_for_status(self):
-                pass
+        def mock_create_s3_client():
+            return MockS3Client()
 
-        def mock_get(url, timeout=None):
-            return MockResponse()
+        monkeypatch.setattr("setup.create_s3_client", mock_create_s3_client)
 
-        monkeypatch.setattr("setup.requests.get", mock_get)
-
-        # Run main
-        main("https://example.com/data.json")
+        # Run main with bucket and key
+        main("test-bucket", "data.json")
 
         # Verify dataset was created in datasets subdirectory
         dataset_file = Path(tmp) / "data" / "datasets" / "ragas_dataset.jsonl"
@@ -189,25 +175,25 @@ def test_main_with_json(temp_dir, monkeypatch):
         os.chdir(original_cwd)
 
 
-def test_main_with_invalid_url(temp_dir, monkeypatch):
-    """Test main function with invalid URL (HTTP error)"""
+def test_main_with_invalid_s3_key(temp_dir, monkeypatch):
+    """Test main function with invalid S3 key (S3 error)"""
 
     tmp, original_cwd = temp_dir
     os.chdir(tmp)
 
     try:
-        # Mock HTTP error
-        class MockResponse:
-            def raise_for_status(self):
-                raise Exception("HTTP 404")
+        # Mock S3 error
+        class MockS3Client:
+            def get_object(self, Bucket, Key):  # noqa: N803
+                raise Exception("NoSuchKey: The specified key does not exist")
 
-        def mock_get(url, timeout=None):
-            return MockResponse()
+        def mock_create_s3_client():
+            return MockS3Client()
 
-        monkeypatch.setattr("setup.requests.get", mock_get)
+        monkeypatch.setattr("setup.create_s3_client", mock_create_s3_client)
 
         # Verify that the error propagates
-        with pytest.raises(Exception, match="HTTP 404"):
-            main("https://example.com/nonexistent.csv")
+        with pytest.raises(Exception, match="NoSuchKey"):
+            main("test-bucket", "nonexistent.csv")
     finally:
         os.chdir(original_cwd)

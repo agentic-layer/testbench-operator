@@ -659,13 +659,9 @@ def test_format_multi_turn_conversation_with_tool_calls():
 
     conversation = [
         {"content": "What's the weather?", "type": "human"},
-        {
-            "content": "",
-            "type": "ai",
-            "tool_calls": [{"name": "get_weather", "args": {"city": "NYC"}}]
-        },
+        {"content": "", "type": "ai", "tool_calls": [{"name": "get_weather", "args": {"city": "NYC"}}]},
         {"content": "{'status': 'success', 'report': 'Sunny, 72F'}", "type": "tool"},
-        {"content": "The weather is sunny.", "type": "ai"}
+        {"content": "The weather is sunny.", "type": "ai"},
     ]
 
     html = _format_multi_turn_conversation(conversation)
@@ -699,9 +695,9 @@ def test_format_multi_turn_conversation_with_multiple_tool_calls():
             "type": "ai",
             "tool_calls": [
                 {"name": "get_weather", "args": {"city": "NYC"}},
-                {"name": "get_time", "args": {"city": "NYC"}}
-            ]
-        }
+                {"name": "get_time", "args": {"city": "NYC"}},
+            ],
+        },
     ]
 
     html = _format_multi_turn_conversation(conversation)
@@ -714,7 +710,7 @@ def test_format_multi_turn_conversation_with_multiple_tool_calls():
 
 def test_prepare_chart_data_with_tool_calls():
     """Test prepare_chart_data handles tool calls in user_input"""
-    from visualize import prepare_chart_data, VisualizationData
+    from visualize import VisualizationData, prepare_chart_data
 
     viz_data = VisualizationData(
         overall_scores={"metric1": 0.85},
@@ -722,16 +718,16 @@ def test_prepare_chart_data_with_tool_calls():
             {
                 "user_input": [
                     {"content": "test", "type": "human"},
-                    {"content": "", "type": "ai", "tool_calls": [{"name": "tool1", "args": {}}]}
+                    {"content": "", "type": "ai", "tool_calls": [{"name": "tool1", "args": {}}]},
                 ],
                 "response": "",
                 "metric1": 0.85,
-                "trace_id": "trace1"
+                "trace_id": "trace1",
             }
         ],
         total_tokens={"input_tokens": 100, "output_tokens": 50},
         total_cost=0.01,
-        metric_names=["metric1"]
+        metric_names=["metric1"],
     )
 
     chart_data = prepare_chart_data(viz_data)

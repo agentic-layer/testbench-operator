@@ -80,7 +80,7 @@ class E2ETestRunner:
         logger.info("✓ All scripts found")
         return True
 
-    def run_command(self, command: List[str], step_name: str, env: dict = None) -> bool:
+    def run_command(self, command: List[str], step_name: str, env: dict | None = None) -> bool:
         """
         Run a command and handle output/errors.
 

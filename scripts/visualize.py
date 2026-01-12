@@ -161,7 +161,7 @@ def _format_multi_turn_conversation(conversation: list[dict[str, Any]]) -> str:
             label = "AI"
 
         html_output += f'<div class="message {css_class}">'
-        html_output += f'<strong>{label}:</strong> '
+        html_output += f"<strong>{label}:</strong> "
 
         # If AI message has tool calls, display them
         if tool_calls:
@@ -170,12 +170,12 @@ def _format_multi_turn_conversation(conversation: list[dict[str, Any]]) -> str:
                 tool_name = tool_call.get("name", "unknown")
                 tool_args = tool_call.get("args", {})
                 # Format args as JSON for readability
-                args_str = json.dumps(tool_args, indent=2)
-                html_output += f'<div class="tool-call">'
+                args_str = html.escape(json.dumps(tool_args, indent=2))
+                html_output += '<div class="tool-call">'
                 html_output += f'<span class="tool-call-name">→ Tool: {tool_name}</span>'
                 html_output += f'<pre class="tool-call-args">{args_str}</pre>'
-                html_output += '</div>'
-            html_output += '</div>'
+                html_output += "</div>"
+            html_output += "</div>"
 
         # Display content if not empty
         if content:
@@ -183,7 +183,7 @@ def _format_multi_turn_conversation(conversation: list[dict[str, Any]]) -> str:
             escaped_content = html.escape(content)
             html_output += f'<span class="message-content">{escaped_content}</span>'
 
-        html_output += '</div>'
+        html_output += "</div>"
 
     html_output += "</div>"
     return html_output

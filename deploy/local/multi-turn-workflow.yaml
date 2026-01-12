@@ -14,9 +14,9 @@ spec:
       - name: metrics-config
         configMap:
           name: multi-turn-metrics-config
-#      - name: dataset
-#        configMap:
-#          name: dataset
+      - name: dataset
+        configMap:
+          name: dataset
 
   container:
     image: ghcr.io/agentic-layer/testbench/testworkflows:latest
@@ -29,19 +29,19 @@ spec:
       - name: metrics-config
         mountPath: /app/config/metrics.yaml
         subPath: metrics.yaml
-#      - name: dataset
-#        mountPath: /data/datasets/ragas_dataset.jsonl
-#        subPath: dataset.jsonl
+      - name: dataset
+        mountPath: /data/datasets/ragas_dataset.jsonl
+        subPath: dataset.jsonl
 
   # Steps using the templates
   steps:
     # Step 1: Setup - Download and convert dataset
-    - name: setup
-      use:
-        - name: ragas-setup-template
-          config:
-            bucket: "datasets"
-            key: "multi_turn_dataset.json"
+#    - name: setup
+#      use:
+#        - name: ragas-setup-template
+#          config:
+#            bucket: "datasets"
+#            key: "multi_turn_dataset.json"
 
     # Step 2: Run - Execute agent queries
     - name: run

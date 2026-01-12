@@ -2,6 +2,7 @@ import argparse
 import asyncio
 import logging
 from logging import Logger
+from typing import Any, cast
 from uuid import uuid4
 
 import httpx
@@ -217,7 +218,7 @@ async def multi_turn_experiment(row, agent_url: str, workflow_name: str) -> dict
                     raise ValueError("No human messages found in user_input")
 
                 context_id = None
-                conversation_messages = []
+                conversation_messages: list[dict[str, Any]] = []
                 seen_message_ids = set()  # Track message_ids to avoid duplicates across all turns
 
                 # Sequentially query agent for each human turn
@@ -229,9 +230,10 @@ async def multi_turn_experiment(row, agent_url: str, workflow_name: str) -> dict
                         turn_span.set_attribute("turn.content", human_msg["content"])
 
                         # Create A2A message
+                        parts: list[Part] = [Part(root=TextPart(text=human_msg["content"]))]
                         message = Message(
                             role=Role.user,
-                            parts=[TextPart(text=human_msg["content"])],
+                            parts=parts,
                             message_id=uuid4().hex,
                             context_id=context_id,  # None for first turn, preserved after
                         )
@@ -253,7 +255,7 @@ async def multi_turn_experiment(row, agent_url: str, workflow_name: str) -> dict
                                         span.set_attribute("conversation.context_id", context_id)
 
                         # Process this turn's history immediately
-                        if turn_task and hasattr(turn_task, 'history') and turn_task.history:
+                        if turn_task and hasattr(turn_task, "history") and turn_task.history:
                             for msg in turn_task.history:
                                 # Skip duplicate messages
                                 if msg.message_id in seen_message_ids:
@@ -292,34 +294,36 @@ async def multi_turn_experiment(row, agent_url: str, workflow_name: str) -> dict
                                             text_content = actual_part.text
 
                                         # Check for DataPart (tool calls or responses)
-                                        elif (hasattr(actual_part, "kind") and actual_part.kind == "data" and
-                                              hasattr(actual_part, "data") and isinstance(actual_part.data, dict) and
-                                              "name" in actual_part.data):
-
+                                        elif (
+                                            hasattr(actual_part, "kind")
+                                            and actual_part.kind == "data"
+                                            and hasattr(actual_part, "data")
+                                            and isinstance(actual_part.data, dict)
+                                            and "name" in actual_part.data
+                                        ):
                                             # Tool call: has args, not response
                                             if "args" in actual_part.data and "response" not in actual_part.data:
-                                                tool_calls_in_msg.append({
-                                                    "name": actual_part.data.get("name"),
-                                                    "args": actual_part.data.get("args", {})
-                                                })
+                                                tool_calls_in_msg.append(
+                                                    {
+                                                        "name": actual_part.data.get("name"),
+                                                        "args": actual_part.data.get("args", {}),
+                                                    }
+                                                )
 
                                             # Tool response: has response, not args
                                             elif "response" in actual_part.data and "args" not in actual_part.data:
                                                 tool_response_data = actual_part.data.get("response", {})
                                                 # Keep as dict/string representation
                                                 response_content = str(tool_response_data)
-                                                tool_responses_in_msg.append({
-                                                    "content": response_content,
-                                                    "type": "tool"
-                                                })
+                                                tool_responses_in_msg.append(
+                                                    {"content": response_content, "type": "tool"}
+                                                )
 
                                     # Add AI message with tool calls (if any) - with empty content
                                     if tool_calls_in_msg:
-                                        conversation_messages.append({
-                                            "content": "",
-                                            "type": "ai",
-                                            "tool_calls": tool_calls_in_msg
-                                        })
+                                        conversation_messages.append(
+                                            {"content": "", "type": "ai", "tool_calls": tool_calls_in_msg}
+                                        )
                                         logger.info(f"Extracted {len(tool_calls_in_msg)} tool call(s)")
 
                                     # Add tool response messages (if any)
@@ -329,10 +333,7 @@ async def multi_turn_experiment(row, agent_url: str, workflow_name: str) -> dict
 
                                     # Add AI message with text content (if any)
                                     if text_content:
-                                        conversation_messages.append({
-                                            "content": text_content,
-                                            "type": "ai"
-                                        })
+                                        conversation_messages.append({"content": text_content, "type": "ai"})
                         else:
                             logger.warning(f"Turn {turn_idx + 1}: task.history not available")
 
