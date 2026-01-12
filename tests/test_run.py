@@ -318,9 +318,9 @@ async def test_multi_turn_experiment_with_tool_calls(monkeypatch):
     row = {
         "user_input": [
             {"content": "What's the weather in NYC?", "type": "human"},
-            {"content": "How about London?", "type": "human"}
+            {"content": "How about London?", "type": "human"},
         ],
-        "reference": "Weather info provided"
+        "reference": "Weather info provided",
     }
 
     # Create mock task objects with tool calls
@@ -334,38 +334,25 @@ async def test_multi_turn_experiment_with_tool_calls(monkeypatch):
             agent_metadata = None
             if has_tool_calls:
                 agent_metadata = {
-                    "tool_calls": [
-                        {
-                            "name": "get_weather",
-                            "args": {"location": "NYC" if turn_idx == 1 else "London"}
-                        }
-                    ]
+                    "tool_calls": [{"name": "get_weather", "args": {"location": "NYC" if turn_idx == 1 else "London"}}]
                 }
 
             self.history = [
                 Message(
                     role=Role.user,
                     parts=[Part(TextPart(text=row["user_input"][turn_idx - 1]["content"]))],
-                    message_id=f"user_msg_{turn_idx}"
+                    message_id=f"user_msg_{turn_idx}",
                 ),
                 Message(
                     role=Role.agent,
                     parts=[Part(TextPart(text=f"Weather response {turn_idx}"))],
                     message_id=f"agent_msg_{turn_idx}",
-                    metadata=agent_metadata
-                )
+                    metadata=agent_metadata,
+                ),
             ]
 
         def model_dump(self, mode=None, include=None):
-            return {
-                "artifacts": [
-                    {
-                        "parts": [
-                            {"text": f"Weather response {self.turn_idx}"}
-                        ]
-                    }
-                ]
-            }
+            return {"artifacts": [{"parts": [{"text": f"Weather response {self.turn_idx}"}]}]}
 
     # Mock client that accumulates history
     class MockClient:
@@ -381,15 +368,12 @@ async def test_multi_turn_experiment_with_tool_calls(monkeypatch):
             self.accumulated_history.append(message)
 
             # Add agent response message to history
-            has_tool_calls = (self.turn_count == 1)
+            has_tool_calls = self.turn_count == 1
             agent_metadata = None
             if has_tool_calls:
                 agent_metadata = {
                     "tool_calls": [
-                        {
-                            "name": "get_weather",
-                            "args": {"location": "NYC" if self.turn_count == 1 else "London"}
-                        }
+                        {"name": "get_weather", "args": {"location": "NYC" if self.turn_count == 1 else "London"}}
                     ]
                 }
 
@@ -397,7 +381,7 @@ async def test_multi_turn_experiment_with_tool_calls(monkeypatch):
                 role=Role.agent,
                 parts=[Part(TextPart(text=f"Weather response {self.turn_count}"))],
                 message_id=f"agent_msg_{self.turn_count}",
-                metadata=agent_metadata
+                metadata=agent_metadata,
             )
             self.accumulated_history.append(agent_message)
 
@@ -430,11 +414,7 @@ async def test_multi_turn_experiment_with_tool_calls(monkeypatch):
     monkeypatch.setattr("run.setup_otel", mock_setup_otel)
 
     # Run the experiment
-    result = await multi_turn_experiment(
-        row,
-        agent_url="http://test-agent:8000",
-        workflow_name="test-workflow"
-    )
+    result = await multi_turn_experiment(row, agent_url="http://test-agent:8000", workflow_name="test-workflow")
 
     # Verify result structure
     assert "user_input" in result
@@ -487,7 +467,7 @@ async def test_multi_turn_experiment_no_tool_calls(monkeypatch):
         "user_input": [
             {"content": "Hello", "type": "human"},
         ],
-        "reference": "Greeting response"
+        "reference": "Greeting response",
     }
 
     # Create mock task without tool calls
@@ -498,29 +478,17 @@ async def test_multi_turn_experiment_no_tool_calls(monkeypatch):
 
             # History without tool calls in metadata
             self.history = [
-                Message(
-                    role=Role.user,
-                    parts=[Part(TextPart(text="Hello"))],
-                    message_id="user_msg_1"
-                ),
+                Message(role=Role.user, parts=[Part(TextPart(text="Hello"))], message_id="user_msg_1"),
                 Message(
                     role=Role.agent,
                     parts=[Part(TextPart(text="Hi there!"))],
                     message_id="agent_msg_1",
-                    metadata=None  # No metadata, no tool calls
-                )
+                    metadata=None,  # No metadata, no tool calls
+                ),
             ]
 
         def model_dump(self, mode=None, include=None):
-            return {
-                "artifacts": [
-                    {
-                        "parts": [
-                            {"text": "Hi there!"}
-                        ]
-                    }
-                ]
-            }
+            return {"artifacts": [{"parts": [{"text": "Hi there!"}]}]}
 
     # Mock client
     class MockClient:
@@ -543,11 +511,7 @@ async def test_multi_turn_experiment_no_tool_calls(monkeypatch):
     monkeypatch.setattr("run.setup_otel", mock_setup_otel)
 
     # Run the experiment
-    result = await multi_turn_experiment(
-        row,
-        agent_url="http://test-agent:8000",
-        workflow_name="test-workflow"
-    )
+    result = await multi_turn_experiment(row, agent_url="http://test-agent:8000", workflow_name="test-workflow")
 
     # Verify result structure
     assert "user_input" in result
@@ -577,7 +541,7 @@ async def test_multi_turn_experiment_with_datapart_tool_calls(monkeypatch):
         "user_input": [
             {"content": "What time is it in New York?", "type": "human"},
         ],
-        "reference": "Time info provided"
+        "reference": "Time info provided",
     }
 
     # Create mock task with DataPart tool calls
@@ -589,59 +553,60 @@ async def test_multi_turn_experiment_with_datapart_tool_calls(monkeypatch):
             # History with DataPart containing both tool call and tool response
             self.history = [
                 Message(
-                    role=Role.user,
-                    parts=[Part(TextPart(text="What time is it in New York?"))],
-                    message_id="user_msg_1"
+                    role=Role.user, parts=[Part(TextPart(text="What time is it in New York?"))], message_id="user_msg_1"
                 ),
                 # Tool call DataPart (has name + args)
                 Message(
                     role=Role.agent,
-                    parts=[Part(DataPart(
-                        kind="data",
-                        data={
-                            "id": "call_get_current_time",
-                            "name": "get_current_time",
-                            "args": {"city": "New York"}
-                        },
-                        metadata={"adk_type": "function_call"}
-                    ))],
+                    parts=[
+                        Part(
+                            DataPart(
+                                kind="data",
+                                data={
+                                    "id": "call_get_current_time",
+                                    "name": "get_current_time",
+                                    "args": {"city": "New York"},
+                                },
+                                metadata={"adk_type": "function_call"},
+                            )
+                        )
+                    ],
                     message_id="agent_msg_1",
-                    metadata=None
+                    metadata=None,
                 ),
                 # Tool response DataPart (has name + response) - should be ignored
                 Message(
                     role=Role.agent,
-                    parts=[Part(DataPart(
-                        kind="data",
-                        data={
-                            "id": "call_get_current_time",
-                            "name": "get_current_time",
-                            "response": {"status": "success", "report": "The current time in New York is 11:22:05 EST"}
-                        },
-                        metadata={"adk_type": "function_response"}
-                    ))],
+                    parts=[
+                        Part(
+                            DataPart(
+                                kind="data",
+                                data={
+                                    "id": "call_get_current_time",
+                                    "name": "get_current_time",
+                                    "response": {
+                                        "status": "success",
+                                        "report": "The current time in New York is 11:22:05 EST",
+                                    },
+                                },
+                                metadata={"adk_type": "function_response"},
+                            )
+                        )
+                    ],
                     message_id="agent_msg_2",
-                    metadata=None
+                    metadata=None,
                 ),
                 # Final text response
                 Message(
                     role=Role.agent,
                     parts=[Part(TextPart(text="The current time in New York is 11:22:05 EST"))],
                     message_id="agent_msg_3",
-                    metadata=None
-                )
+                    metadata=None,
+                ),
             ]
 
         def model_dump(self, mode=None, include=None):
-            return {
-                "artifacts": [
-                    {
-                        "parts": [
-                            {"text": "The current time in New York is 11:22:05 EST"}
-                        ]
-                    }
-                ]
-            }
+            return {"artifacts": [{"parts": [{"text": "The current time in New York is 11:22:05 EST"}]}]}
 
     # Mock client
     class MockClient:
@@ -664,11 +629,7 @@ async def test_multi_turn_experiment_with_datapart_tool_calls(monkeypatch):
     monkeypatch.setattr("run.setup_otel", mock_setup_otel)
 
     # Run the experiment
-    result = await multi_turn_experiment(
-        row,
-        agent_url="http://test-agent:8000",
-        workflow_name="test-workflow"
-    )
+    result = await multi_turn_experiment(row, agent_url="http://test-agent:8000", workflow_name="test-workflow")
 
     # Verify result structure
     assert "user_input" in result

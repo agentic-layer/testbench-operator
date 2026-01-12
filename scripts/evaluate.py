@@ -154,7 +154,7 @@ class MetricsRegistry:
                 config = json.load(f)
         elif config_path.endswith((".yaml", ".yml")):
             try:
-                import yaml
+                import yaml  # type: ignore[import-untyped]
             except ImportError:
                 raise ValueError(
                     "YAML support requires 'pyyaml' package.\n"
@@ -441,7 +441,7 @@ Config file format (JSON):
         "--metrics-config",
         type=str,
         default="config/metrics.json",
-        help="Path to metrics configuration file (JSON or YAML). Default: examples/metrics_simple.json",
+        help="Path to metrics configuration file (JSON or YAML). Default: config/metrics.json",
     )
 
     parser.add_argument(

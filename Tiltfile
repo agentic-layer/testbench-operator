@@ -25,6 +25,14 @@ v1alpha1.extension(name='agent-gateway-krakend', repo_name='agentic-layer', repo
 load('ext://agent-gateway-krakend', 'agent_gateway_krakend_install')
 agent_gateway_krakend_install(version='0.4.1')
 
+# Pre-create testkube namespace to avoid race condition with kustomize resources
+k8s_yaml(blob('''
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: testkube
+'''))
+
 load('ext://helm_resource', 'helm_resource')
 helm_resource(
     'testkube',

@@ -3,19 +3,18 @@ import logging
 import os
 from io import BytesIO
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 import boto3
-from botocore.client import Config
 import pandas as pd
-from botocore.exceptions import ClientError, NoCredentialsError, PartialCredentialsError
+from botocore.client import Config
 from pandas import DataFrame
 from ragas import Dataset
-
 
 # Set up module-level logger
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 def dataframe_to_ragas_dataset(dataframe: DataFrame) -> None:
     """Convert DataFrame to Ragas dataset and save to data/ragas_dataset.jsonl.
@@ -30,7 +29,7 @@ def dataframe_to_ragas_dataset(dataframe: DataFrame) -> None:
     output_dir.mkdir(exist_ok=True)
 
     # Create Ragas Dataset
-    dataset = Dataset.from_pandas(
+    dataset: Dataset = Dataset.from_pandas(
         name="ragas_dataset",
         dataframe=dataframe,
         backend="local/jsonl",
@@ -81,7 +80,7 @@ def custom_convert_csv(input_file: BytesIO) -> DataFrame:
     return dataframe
 
 
-def create_s3_client() -> boto3.client:
+def create_s3_client() -> Any:
     """Create and configure S3 client for MinIO"""
     # Get MinIO credentials from environment
     access_key = os.getenv("MINIO_ROOT_USER", "minio")
