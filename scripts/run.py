@@ -115,7 +115,7 @@ async def single_turn_experiment(row, agent_url: str, workflow_name: str) -> dic
         span.set_attribute("workflow.name", workflow_name)
 
         try:
-            async with httpx.AsyncClient():
+            async with httpx.AsyncClient(timeout=httpx.Timeout(300)):
                 client = await initialize_client(agent_url)
 
                 # Get the input from the row
@@ -208,7 +208,7 @@ async def multi_turn_experiment(row, agent_url: str, workflow_name: str) -> dict
             # Validate input format
             user_input = validate_multi_turn_input(row.get("user_input"))
 
-            async with httpx.AsyncClient():
+            async with httpx.AsyncClient(timeout=httpx.Timeout(300)):
                 client = await initialize_client(agent_url)
 
                 # Extract only human messages (agent messages are from dataset, not sent)
