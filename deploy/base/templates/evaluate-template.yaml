@@ -12,14 +12,10 @@ spec:
     model:
       type: string
       description: "Model name to use for evaluation (e.g., gemini-2.5-flash-lite)"
-    metricsConfigPath:
+    openApiBasePath:
       type: string
-      description: "Path to metrics configuration file (JSON or YAML)"
-      default: "config/metrics.yaml"
-    image:
-      type: string
-      description: "Docker image to use for the evaluate step"
-      default: "ghcr.io/agentic-layer/testbench/testworkflows:0.1.1"
+      description: "Base path for OpenAI API"
+      default: "http://ai-gateway-litellm.ai-gateway:4000"
 
   # Steps to execute
   steps:
@@ -33,7 +29,7 @@ spec:
           - -c
         args:
           - |
-            uv run python3 evaluate.py "{{ config.model }}" --metrics-config "{{ config.metricsConfigPath }}" && \
+            uv run python3 evaluate.py "{{ config.model }}" --metrics-config "/app/config/metrics.yaml" && \
             if [ -f data/results/evaluation_scores.json ]; then
               echo "✓ Evaluation completed"
               cat data/results/evaluation_scores.json
@@ -41,3 +37,6 @@ spec:
               echo "✗ Error: Results file not created"
               exit 1
             fi
+        env:
+          - name: OPENAI_API_BASE
+            value: "{{ config.openApiBasePath }}"

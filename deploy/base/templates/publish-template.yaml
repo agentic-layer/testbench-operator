@@ -8,6 +8,13 @@ metadata:
     app: testworkflows
 
 spec:
+
+  config:
+    otelExporterOtlpEndpoint:
+      type: string
+      description: "OTel Collector endpoint for exporting traces and metrics"
+      default: "http://lgtm.monitoring:4318"
+
   # Steps to execute
   steps:
     - name: publish-metrics
@@ -17,3 +24,6 @@ spec:
           - "{{ workflow.name }}"
           - "{{ execution.id }}"
           - "{{ execution.number }}"
+        env:
+          - name: OTEL_EXPORTER_OTLP_ENDPOINT
+            value: "{{ config.otelExporterOtlpEndpoint }}"
