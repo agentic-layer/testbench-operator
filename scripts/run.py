@@ -63,20 +63,20 @@ def validate_multi_turn_input(user_input: list) -> list[dict]:
     return user_input
 
 
-async def initialize_client(agent_url: str) -> Client:
+async def initialize_client(agent_url: str, client: httpx.AsyncClient) -> Client:
     """Initialize the A2A client with a minimal agent card."""
     logger.info(f"Initializing A2A client for: {agent_url}")
 
     # Create a minimal agent card with the provided URL
     agent_card: AgentCard = minimal_agent_card(agent_url)
 
-    config: ClientConfig = ClientConfig()
+    config: ClientConfig = ClientConfig(httpx_client=client)
     factory: ClientFactory = ClientFactory(config)
-    client: Client = factory.create(agent_card)
+    a2a_client: Client = factory.create(agent_card)
 
     logger.info("A2A client initialized successfully")
 
-    return client
+    return a2a_client
 
 
 @experiment()
@@ -115,8 +115,8 @@ async def single_turn_experiment(row, agent_url: str, workflow_name: str) -> dic
         span.set_attribute("workflow.name", workflow_name)
 
         try:
-            async with httpx.AsyncClient(timeout=httpx.Timeout(300)):
-                client = await initialize_client(agent_url)
+            async with httpx.AsyncClient(timeout=httpx.Timeout(300)) as client:
+                a2a_client = await initialize_client(agent_url, client)
 
                 # Get the input from the row
                 input_text = row.get("user_input")
@@ -129,7 +129,7 @@ async def single_turn_experiment(row, agent_url: str, workflow_name: str) -> dic
 
                 logger.info(f"Processing: {input_text}")
 
-                async for response in client.send_message(message):
+                async for response in a2a_client.send_message(message):
                     # Client returns tuples, extract the task/message
                     if isinstance(response, tuple):
                         task, _ = response
@@ -208,8 +208,8 @@ async def multi_turn_experiment(row, agent_url: str, workflow_name: str) -> dict
             # Validate input format
             user_input = validate_multi_turn_input(row.get("user_input"))
 
-            async with httpx.AsyncClient(timeout=httpx.Timeout(300)):
-                client = await initialize_client(agent_url)
+            async with httpx.AsyncClient(timeout=httpx.Timeout(300)) as client:
+                a2a_client = await initialize_client(agent_url, client)
 
                 # Extract only human messages (agent messages are from dataset, not sent)
                 human_messages = [msg for msg in user_input if msg.get("type") == "human"]
@@ -242,7 +242,7 @@ async def multi_turn_experiment(row, agent_url: str, workflow_name: str) -> dict
 
                         # Send message and get response
                         turn_task = None
-                        async for response in client.send_message(message):
+                        async for response in a2a_client.send_message(message):
                             if isinstance(response, tuple):
                                 task, _ = response
                                 if task:
