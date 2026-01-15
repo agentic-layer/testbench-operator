@@ -1,0 +1,18 @@
+apiVersion: tests.testkube.io/v1
+kind: TestTrigger
+metadata:
+  name: multi-turn-workflow-trigger
+  namespace: testkube
+spec:
+  resource: deployment
+  resourceSelector:
+    name: weather-agent
+    namespace: sample-agents
+  event: modified
+  action: run
+  execution: testworkflow
+  concurrencyPolicy: allow
+  testSelector:
+    name: multi-turn-workflow
+    namespace: testkube
+  disabled: false

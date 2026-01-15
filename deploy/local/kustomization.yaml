@@ -7,3 +7,4 @@ resources:
   - ../base
   - multi-turn-metrics-configmap.yaml
   - multi-turn-workflow.yaml
+  - multi-turn-workflow-trigger.yaml
