@@ -178,6 +178,31 @@ def test_get_user_input_hash_different_for_different_inputs():
     assert hash1 != hash2
 
 
+def test_get_user_input_hash_with_list():
+    """Test that _get_user_input_hash handles list inputs (multi-turn conversations)"""
+    list_input = [
+        {"content": "Hello", "type": "human"},
+        {"content": "Hi there!", "type": "ai"},
+        {"content": "How are you?", "type": "human"},
+    ]
+    result = _get_user_input_hash(list_input)
+    assert len(result) == 12
+    assert all(c in "0123456789abcdef" for c in result)
+
+
+def test_get_user_input_hash_list_is_deterministic():
+    """Test that _get_user_input_hash returns same hash for same list input"""
+    list_input = [{"content": "Test message", "type": "human"}]
+    assert _get_user_input_hash(list_input) == _get_user_input_hash(list_input)
+
+
+def test_get_user_input_hash_different_lists_different_hashes():
+    """Test that different list inputs produce different hashes"""
+    list1 = [{"content": "Message 1", "type": "human"}]
+    list2 = [{"content": "Message 2", "type": "human"}]
+    assert _get_user_input_hash(list1) != _get_user_input_hash(list2)
+
+
 # Test _get_user_input_truncated
 def test_get_user_input_truncated_short_input():
     """Test that short inputs are returned unchanged"""
@@ -204,6 +229,27 @@ def test_get_user_input_truncated_custom_length():
     input_text = "This is a longer question"
     result = _get_user_input_truncated(input_text, max_length=10)
     assert result == "This is a ..."
+
+
+def test_get_user_input_truncated_with_list():
+    """Test that _get_user_input_truncated handles list inputs (multi-turn conversations)"""
+    list_input = [
+        {"content": "Hello", "type": "human"},
+        {"content": "Hi there!", "type": "ai"},
+    ]
+    result = _get_user_input_truncated(list_input)
+    # List gets converted to JSON string, which should be less than 50 chars for this small list
+    assert isinstance(result, str)
+    assert len(result) <= 53  # max_length + "..."
+
+
+def test_get_user_input_truncated_with_long_list():
+    """Test that long list inputs get truncated"""
+    # Create a long conversation that will exceed max_length when JSON-stringified
+    list_input = [{"content": f"This is a very long message number {i}", "type": "human"} for i in range(10)]
+    result = _get_user_input_truncated(list_input)
+    assert len(result) == 53  # 50 chars + "..."
+    assert result.endswith("...")
 
 
 # Test load_evaluation_data

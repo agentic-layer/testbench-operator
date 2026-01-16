@@ -48,16 +48,24 @@ def _is_metric_value(value: Any) -> TypeGuard[int | float]:
     return True
 
 
-def _get_user_input_hash(user_input: str) -> str:
+def _get_user_input_hash(user_input: str | list) -> str:
     """Generate a short hash of the user input for stable identification."""
-    return hashlib.sha256(user_input.encode()).hexdigest()[:12]
+    # Convert list to JSON string for hashing (multi-turn conversations)
+    input_str = json.dumps(user_input) if isinstance(user_input, list) else user_input
+    return hashlib.sha256(input_str.encode()).hexdigest()[:12]
 
 
-def _get_user_input_truncated(user_input: str, max_length: int = 50) -> str:
+def _get_user_input_truncated(user_input: str | list, max_length: int = 50) -> str:
     """Truncate user input text for display in metric labels."""
-    if len(user_input) <= max_length:
-        return user_input
-    return user_input[:max_length] + "..."
+    # Convert list to readable string (multi-turn conversations)
+    if isinstance(user_input, list):
+        user_input_str = json.dumps(user_input)
+    else:
+        user_input_str = user_input
+
+    if len(user_input_str) <= max_length:
+        return user_input_str
+    return user_input_str[:max_length] + "..."
 
 
 def create_and_push_metrics(
