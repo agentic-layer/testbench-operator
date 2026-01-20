@@ -51,7 +51,7 @@ k8s_resource('lgtm', port_forwards=['11000:3000', '4318:4318'])
 
 # Declare Testkube resources
 k8s_kind(
-    '^TestWorkflow.*$',
+    '^Test(Workflow.*|Trigger.*)$',
     pod_readiness='ignore',
 )
 
@@ -61,3 +61,4 @@ k8s_resource('ragas-run-template', resource_deps=['testkube'])
 k8s_resource('ragas-setup-template', resource_deps=['testkube'])
 k8s_resource('ragas-visualize-template', resource_deps=['testkube'])
 k8s_resource('multi-turn-workflow', resource_deps=['testkube'])
+k8s_resource('multi-turn-workflow-trigger', resource_deps=['testkube'])
