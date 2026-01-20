@@ -18,16 +18,410 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 0,
+  "id": 5,
   "links": [],
   "panels": [
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineStyle": {
+              "fill": "solid"
+            },
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 15,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.1",
+      "targets": [
+        {
+          "editorMode": "builder",
+          "expr": "max by(type) (avg by(execution_number, type) (testbench_evaluation_token_usage{workflow_name=\"$workflow\"}))",
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Token Usage Over Time",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "decimals": 2,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "id": 16,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.97,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "orientation": "auto",
+        "showValue": "auto",
+        "stacking": "none",
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        },
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0
+      },
+      "pluginVersion": "12.3.1",
+      "targets": [
+        {
+          "editorMode": "builder",
+          "expr": "avg by(execution_number) (testbench_evaluation_cost{workflow_name=\"$workflow\"})",
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Cost Per Test (USD)",
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {}
+        },
+        {
+          "id": "groupBy",
+          "options": {
+            "fields": {
+              "Value": {
+                "aggregations": [
+                  "lastNotNull"
+                ],
+                "operation": "aggregate"
+              },
+              "execution_number": {
+                "aggregations": [],
+                "operation": "groupby"
+              }
+            }
+          }
+        },
+        {
+          "id": "merge",
+          "options": {}
+        }
+      ],
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "series",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "fieldMinMax": false,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "__systemRef": "hideSeriesFrom",
+            "matcher": {
+              "id": "byNames",
+              "options": {
+                "mode": "exclude",
+                "names": [
+                  "Value (lastNotNull) input_tokens"
+                ],
+                "prefix": "All except:",
+                "readOnly": true
+              }
+            },
+            "properties": [
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "legend": false,
+                  "tooltip": true,
+                  "viz": true
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "id": 18,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.97,
+        "colorByField": "execution_number",
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "orientation": "auto",
+        "showValue": "auto",
+        "stacking": "none",
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        },
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0
+      },
+      "pluginVersion": "12.3.1",
+      "targets": [
+        {
+          "editorMode": "builder",
+          "expr": "avg by(execution_number, type) (testbench_evaluation_token_usage{workflow_name=\"$workflow\", type=\"input_tokens\"})",
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "builder",
+          "expr": "avg by(execution_number, type) (testbench_evaluation_token_usage{workflow_name=\"$workflow\", type=\"output_tokens\"})",
+          "hide": false,
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "Tokens per Test",
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {}
+        },
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "field": "execution_number"
+              }
+            ]
+          }
+        },
+        {
+          "id": "groupBy",
+          "options": {
+            "fields": {
+              "Value": {
+                "aggregations": [
+                  "lastNotNull"
+                ],
+                "operation": "aggregate"
+              },
+              "execution_number": {
+                "aggregations": [],
+                "operation": "groupby"
+              },
+              "type": {
+                "aggregations": [],
+                "operation": "groupby"
+              }
+            }
+          }
+        },
+        {
+          "id": "groupingToMatrix",
+          "options": {
+            "columnField": "type",
+            "rowField": "execution_number",
+            "valueField": "Value (lastNotNull)"
+          }
+        }
+      ],
+      "type": "barchart"
+    },
     {
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 0
+        "y": 24
       },
       "id": 4,
       "panels": [],
@@ -100,7 +494,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 1
+        "y": 25
       },
       "id": 11,
       "options": {
@@ -120,16 +514,16 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.3.0",
+      "pluginVersion": "12.3.1",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "editorMode": "builder",
+          "editorMode": "code",
           "exemplar": false,
-          "expr": "avg(testbench_evaluation_metric{name=\"context_recall\", workflow_name=\"ragas-evaluation-workflow\"})",
+          "expr": "avg by(name) (last_over_time(testbench_evaluation_metric{name=\"$metric\", workflow_name=\"$workflow\"}[$__interval]))",
           "hide": false,
           "instant": false,
           "legendFormat": "Average",
@@ -194,7 +588,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 1
+        "y": 25
       },
       "id": 14,
       "options": {
@@ -233,15 +627,15 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.3.0",
+      "pluginVersion": "12.3.1",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "editorMode": "code",
-          "expr": "avg by(execution_number) (testbench_evaluation_metric{workflow_name=\"ragas-evaluation-workflow\", name=~\"$metric\"})",
+          "editorMode": "builder",
+          "expr": "avg by(execution_number) (testbench_evaluation_metric{workflow_name=\"$workflow\", name=~\"$metric\"})",
           "hide": false,
           "instant": false,
           "legendFormat": "Average",
@@ -346,7 +740,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 9
+        "y": 33
       },
       "id": 8,
       "options": {
@@ -366,15 +760,15 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.3.0",
+      "pluginVersion": "12.3.1",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "editorMode": "builder",
-          "expr": "max by (user_input_hash, user_input_truncated) (\n    testbench_evaluation_metric{name=\"context_recall\", workflow_name=\"ragas-evaluation-workflow\"}\n  )",
+          "editorMode": "code",
+          "expr": "max by(sample_hash, user_input_truncated) (last_over_time(testbench_evaluation_metric{name=\"$metric\", workflow_name=\"$workflow\"}[$__interval]))",
           "hide": false,
           "instant": false,
           "legendFormat": "Question: \"{{user_input_truncated}}\"",
@@ -439,7 +833,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 9
+        "y": 33
       },
       "id": 13,
       "options": {
@@ -476,15 +870,15 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.3.0",
+      "pluginVersion": "12.3.1",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "editorMode": "code",
-          "expr": "avg by(user_input_hash, trace_id, user_input_truncated, execution_number) (testbench_evaluation_metric{workflow_name=\"ragas-evaluation-workflow\", name=~\"$metric\"})",
+          "editorMode": "builder",
+          "expr": "avg by(sample_hash, trace_id, user_input_truncated, execution_number) (testbench_evaluation_metric{workflow_name=\"$workflow\", name=~\"$metric\"})",
           "hide": false,
           "instant": false,
           "legendFormat": "Question: \"{{user_input_truncated}}\"",
@@ -534,14 +928,14 @@
                 ],
                 "operation": "aggregate"
               },
+              "sample_hash": {
+                "aggregations": []
+              },
               "trace_id": {
                 "aggregations": [
                   "lastNotNull"
                 ],
                 "operation": "aggregate"
-              },
-              "user_input_hash": {
-                "aggregations": []
               },
               "user_input_truncated": {
                 "aggregations": [],
@@ -588,8 +982,8 @@
     "list": [
       {
         "current": {
-          "text": "ragas-evaluation-workflow",
-          "value": "ragas-evaluation-workflow"
+          "text": "multi-turn-workflow",
+          "value": "multi-turn-workflow"
         },
         "definition": "label_values(workflow_name)",
         "description": "name of the TestWorkflow CR",
@@ -628,12 +1022,12 @@
     ]
   },
   "time": {
-    "from": "2025-12-19T10:24:55.111Z",
-    "to": "2025-12-19T15:28:09.705Z"
+    "from": "now-15m",
+    "to": "now"
   },
   "timepicker": {},
   "timezone": "browser",
   "title": "Workflow Evaluations",
-  "uid": "g9lx75",
-  "version": 32
+  "uid": "g9lx76",
+  "version": 1
 }

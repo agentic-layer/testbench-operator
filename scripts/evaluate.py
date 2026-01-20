@@ -265,18 +265,31 @@ def format_evaluation_scores(
         ragas_result: The result object from RAGAS evaluate()
         cost_per_input_token: Cost per input token
         cost_per_output_token: Cost per output token
-        experiment_file: Path to experiment JSONL file (to extract trace_ids)
+        experiment_file: Path to experiment JSONL file (to extract custom fields)
 
     Returns:
         Formatted dictionary matching the required structure
+
+    Note:
+        Custom fields (e.g., trace_id, sample_hash) are automatically preserved by
+        detecting which fields RAGAS recognizes using get_features() and re-adding
+        any unrecognized fields from the original experiment file.
     """
 
-    # Load trace_ids from experiment file (RAGAS drops custom fields during processing)
-    trace_ids = []
+    # Determine which fields RAGAS recognizes using its own get_features() method
+    # Any fields not in this list are custom fields that we need to preserve
+    ragas_features = set()
+    if ragas_result.dataset.samples:
+        ragas_features = set(ragas_result.dataset.samples[0].get_features())
+
+    # Load custom fields from experiment file (RAGAS drops custom fields during processing)
+    custom_fields_per_row = []
     with open(experiment_file, "r") as f:
         for line in f:
             data = json.loads(line)
-            trace_ids.append(data.get("trace_id"))
+            # Extract any field that RAGAS doesn't recognize
+            custom_fields = {k: v for k, v in data.items() if k not in ragas_features}
+            custom_fields_per_row.append(custom_fields)
 
     # Calculate overall scores (mean of each metric)
     overall_scores = ragas_result._repr_dict
@@ -284,13 +297,12 @@ def format_evaluation_scores(
     # Build individual results
     individual_results = ragas_result.to_pandas().to_dict(orient="records")
 
-    # Merge trace_ids back into individual_results (preserve by row order)
+    # Merge custom fields back into individual_results (preserve by row order)
     for i, result in enumerate(individual_results):
-        if i < len(trace_ids):
-            result["trace_id"] = trace_ids[i]
+        if i < len(custom_fields_per_row):
+            result.update(custom_fields_per_row[i])
         else:
-            logger.warning(f"No trace_id found for result {i}")
-            result["trace_id"] = None
+            logger.warning(f"No custom fields found for result {i}")
 
     # Extract token usage and calculate cost using TokenUsageParser
     # Check if token usage data was collected (some metrics don't use LLMs or use separate LLM instances)

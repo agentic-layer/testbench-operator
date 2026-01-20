@@ -1,8 +1,10 @@
 import argparse
 import asyncio
+import hashlib
+import json
 import logging
 from logging import Logger
-from typing import Any, cast
+from typing import Any
 from uuid import uuid4
 
 import httpx
@@ -79,6 +81,53 @@ async def initialize_client(agent_url: str, client: httpx.AsyncClient) -> Client
     return a2a_client
 
 
+def _get_sample_hash(sample: str | list | dict) -> str:
+    """Generate a short hash of the sample for stable identification."""
+    # Convert to JSON string for hashing (dicts and lists need sorting for consistency)
+    if isinstance(sample, (list, dict)):
+        input_str = json.dumps(sample, sort_keys=True)
+    else:
+        input_str = sample
+    return hashlib.sha256(input_str.encode()).hexdigest()[:12]
+
+
+def _validate_hash_uniqueness(experiment_file: str) -> None:
+    """
+    Validate that all sample_hash values in experiment file are unique.
+
+    Args:
+        experiment_file: Path to experiment JSONL file
+
+    Raises:
+        ValueError: If duplicate hashes or missing hashes found
+    """
+    hash_to_lines: dict[str, list[int]] = {}
+
+    with open(experiment_file, "r") as f:
+        for line_num, line in enumerate(f, start=1):
+            data = json.loads(line)
+
+            if "sample_hash" not in data:
+                raise ValueError(f"Missing sample_hash at line {line_num}")
+
+            sample_hash = data["sample_hash"]
+
+            if sample_hash in hash_to_lines:
+                hash_to_lines[sample_hash].append(line_num)
+            else:
+                hash_to_lines[sample_hash] = [line_num]
+
+    # Find duplicates
+    duplicates = {h: lines for h, lines in hash_to_lines.items() if len(lines) > 1}
+
+    if duplicates:
+        dup_count = len(duplicates)
+        error_msg = f"Found {dup_count} duplicate sample_hash value(s):\n"
+        for hash_val, lines in duplicates.items():
+            error_msg += f"  {hash_val}: lines {lines}\n"
+        raise ValueError(error_msg.strip())
+
+
 @experiment()
 async def single_turn_experiment(row, agent_url: str, workflow_name: str) -> dict[str, str | list]:
     """
@@ -98,9 +147,12 @@ async def single_turn_experiment(row, agent_url: str, workflow_name: str) -> dic
     # Get tracer for creating spans
     tracer = trace.get_tracer("testbench.run")
 
+    user_input = row.get("user_input", "")
+    sample_hash = _get_sample_hash(row)
+
     # Create span for this test case
     # Span name includes user_input preview for debugging
-    user_input_preview = row.get("user_input", "")[:50]
+    user_input_preview = user_input[:50]
     span_name = f"query_agent: {user_input_preview}"
 
     with tracer.start_as_current_span(span_name) as span:
@@ -109,7 +161,7 @@ async def single_turn_experiment(row, agent_url: str, workflow_name: str) -> dic
         trace_id = format(span_context.trace_id, "032x")  # 32-char hex string
 
         # Add span attributes for filtering/debugging in Tempo UI
-        span.set_attribute("test.user_input", row.get("user_input", ""))
+        span.set_attribute("test.user_input", user_input)
         span.set_attribute("test.reference", row.get("reference", ""))
         span.set_attribute("agent.url", agent_url)
         span.set_attribute("workflow.name", workflow_name)
@@ -158,6 +210,7 @@ async def single_turn_experiment(row, agent_url: str, workflow_name: str) -> dic
         # Return the original row data plus results AND trace_id
         result: dict[str, str | list] = {
             **row,
+            "sample_hash": sample_hash,
             "response": output_text,
             "trace_id": trace_id,
         }
@@ -187,6 +240,8 @@ async def multi_turn_experiment(row, agent_url: str, workflow_name: str) -> dict
     """
     # Get tracer for creating spans
     tracer = trace.get_tracer("testbench.run")
+
+    sample_hash = _get_sample_hash(row)
 
     # Create parent span for entire conversation
     user_input_preview = str(row.get("user_input", []))[:100]
@@ -358,6 +413,7 @@ async def multi_turn_experiment(row, agent_url: str, workflow_name: str) -> dict
             # Return minimal result
             return {
                 **row,
+                "sample_hash": sample_hash,
                 "user_input": row.get("user_input"),
                 "trace_id": trace_id,
             }
@@ -365,6 +421,7 @@ async def multi_turn_experiment(row, agent_url: str, workflow_name: str) -> dict
         # Return result in MultiTurnSample format
         result = {
             **row,
+            "sample_hash": sample_hash,
             "user_input": user_input_serialized,
             "trace_id": trace_id,
         }

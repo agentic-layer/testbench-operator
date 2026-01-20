@@ -1,5 +1,4 @@
 import argparse
-import hashlib
 import json
 import logging
 import math
@@ -48,13 +47,6 @@ def _is_metric_value(value: Any) -> TypeGuard[int | float]:
     return True
 
 
-def _get_user_input_hash(user_input: str | list) -> str:
-    """Generate a short hash of the user input for stable identification."""
-    # Convert list to JSON string for hashing (multi-turn conversations)
-    input_str = json.dumps(user_input) if isinstance(user_input, list) else user_input
-    return hashlib.sha256(input_str.encode()).hexdigest()[:12]
-
-
 def _get_user_input_truncated(user_input: str | list, max_length: int = 50) -> str:
     """Truncate user input text for display in metric labels."""
     # Convert list to readable string (multi-turn conversations)
@@ -90,7 +82,7 @@ def create_and_push_metrics(
         otlp_endpoint = f"http://{otlp_endpoint}"
 
     exporter = OTLPMetricExporter(endpoint=f"{otlp_endpoint}/v1/metrics")
-    reader = PeriodicExportingMetricReader(exporter=exporter, export_interval_millis=1000)
+    reader = PeriodicExportingMetricReader(exporter=exporter, export_interval_millis=3600000)
     resource = Resource.create({"service.name": "ragas-evaluation", "workflow.name": workflow_name})
     provider = MeterProvider(resource=resource, metric_readers=[reader])
     metrics.set_meter_provider(provider)
@@ -125,13 +117,14 @@ def create_and_push_metrics(
                     logger.warning(f"Missing trace_id for sample in execution {execution_id}")
                     trace_id = "missing-trace-id"
                 user_input = result.get("user_input", "(user_input missing or invalid)")
+                sample_hash = result.get("sample_hash", "")
                 attributes = {
                     "name": metric_name,
                     "workflow_name": workflow_name,
                     "execution_id": execution_id,
                     "execution_number": execution_number,
                     "trace_id": trace_id,
-                    "user_input_hash": _get_user_input_hash(user_input),
+                    "sample_hash": sample_hash,
                     "user_input_truncated": _get_user_input_truncated(user_input),
                 }
                 metric_gauge.set(score, attributes)

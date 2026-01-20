@@ -15,6 +15,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 from run import (
+    _validate_hash_uniqueness,
     initialize_client,
     main,
     single_turn_experiment,
@@ -62,8 +63,14 @@ async def test_initialize_client_creates_client(monkeypatch):
     monkeypatch.setattr("run.minimal_agent_card", mock_agent_card)
     monkeypatch.setattr("run.ClientFactory", mock_factory_init)
 
+    # Create mock httpx client
+    class MockHttpxClient:
+        pass
+
+    mock_httpx_client = MockHttpxClient()
+
     # Call the function
-    result = await initialize_client("http://test-agent:8000")
+    result = await initialize_client("http://test-agent:8000", mock_httpx_client)
 
     # Verify
     assert result == mock_client
@@ -90,7 +97,7 @@ async def test_single_turn_experiment_success(monkeypatch):
 
     mock_client = MockClient()
 
-    async def mock_init_client(url):
+    async def mock_init_client(agent_url, client):
         return mock_client
 
     # Mock httpx AsyncClient
@@ -101,7 +108,7 @@ async def test_single_turn_experiment_success(monkeypatch):
         async def __aexit__(self, exc_type, exc_val, exc_tb):
             pass
 
-    def mock_httpx_client():
+    def mock_httpx_client(**kwargs):
         return MockAsyncClient()
 
     monkeypatch.setattr("run.initialize_client", mock_init_client)
@@ -133,7 +140,7 @@ async def test_single_turn_experiment_error(monkeypatch):
     """Test agent query with error handling"""
 
     # Mock client that raises an error
-    async def mock_init_client(url):
+    async def mock_init_client(agent_url, client):
         raise Exception("Connection failed")
 
     # Mock httpx AsyncClient
@@ -144,7 +151,7 @@ async def test_single_turn_experiment_error(monkeypatch):
         async def __aexit__(self, exc_type, exc_val, exc_tb):
             pass
 
-    def mock_httpx_client():
+    def mock_httpx_client(**kwargs):
         return MockAsyncClient()
 
     monkeypatch.setattr("run.initialize_client", mock_init_client)
@@ -402,7 +409,7 @@ async def test_multi_turn_experiment_with_tool_calls(monkeypatch):
     mock_client = MockClient()
 
     # Mock initialize_client
-    async def mock_initialize_client(agent_url):
+    async def mock_initialize_client(agent_url, client):
         return mock_client
 
     monkeypatch.setattr("run.initialize_client", mock_initialize_client)
@@ -499,7 +506,7 @@ async def test_multi_turn_experiment_no_tool_calls(monkeypatch):
     mock_client = MockClient()
 
     # Mock initialize_client
-    async def mock_initialize_client(agent_url):
+    async def mock_initialize_client(agent_url, client):
         return mock_client
 
     monkeypatch.setattr("run.initialize_client", mock_initialize_client)
@@ -617,7 +624,7 @@ async def test_multi_turn_experiment_with_datapart_tool_calls(monkeypatch):
     mock_client = MockClient()
 
     # Mock initialize_client
-    async def mock_initialize_client(agent_url):
+    async def mock_initialize_client(agent_url, client):
         return mock_client
 
     monkeypatch.setattr("run.initialize_client", mock_initialize_client)
@@ -660,3 +667,56 @@ async def test_multi_turn_experiment_with_datapart_tool_calls(monkeypatch):
     assert conversation[3]["type"] == "ai"
     assert conversation[3]["content"] == "The current time in New York is 11:22:05 EST"
     assert "tool_calls" not in conversation[3], "Final AI message should not have tool_calls"
+
+
+def test_validate_hash_uniqueness_success(tmp_path):
+    """Test validation passes with unique hashes."""
+    experiment_file = tmp_path / "experiment.jsonl"
+    experiment_file.write_text(
+        '{"user_input":"query1","sample_hash":"abc123","response":"r1"}\n'
+        '{"user_input":"query2","sample_hash":"def456","response":"r2"}\n'
+    )
+
+    # Should not raise
+    _validate_hash_uniqueness(str(experiment_file))
+
+
+def test_validate_hash_uniqueness_duplicate(tmp_path):
+    """Test validation fails with duplicate hashes."""
+    experiment_file = tmp_path / "experiment.jsonl"
+    experiment_file.write_text(
+        '{"user_input":"query1","sample_hash":"abc123","response":"r1"}\n'
+        '{"user_input":"query2","sample_hash":"abc123","response":"r2"}\n'
+    )
+
+    with pytest.raises(ValueError, match="Found 1 duplicate sample_hash"):
+        _validate_hash_uniqueness(str(experiment_file))
+
+
+def test_validate_hash_uniqueness_missing_hash(tmp_path):
+    """Test validation fails if sample_hash is missing."""
+    experiment_file = tmp_path / "experiment.jsonl"
+    experiment_file.write_text('{"user_input":"query1","response":"r1"}\n')
+
+    with pytest.raises(ValueError, match="Missing sample_hash at line 1"):
+        _validate_hash_uniqueness(str(experiment_file))
+
+
+def test_validate_hash_uniqueness_multiple_duplicates(tmp_path):
+    """Test validation reports multiple duplicates correctly."""
+    experiment_file = tmp_path / "experiment.jsonl"
+    lines = [
+        '{"user_input":"query1","sample_hash":"abc123","response":"r1"}\n',
+        '{"user_input":"query2","sample_hash":"def456","response":"r2"}\n',
+        '{"user_input":"query3","sample_hash":"abc123","response":"r3"}\n',  # dup1
+        '{"user_input":"query4","sample_hash":"def456","response":"r4"}\n',  # dup2
+    ]
+    experiment_file.write_text("".join(lines))
+
+    with pytest.raises(ValueError, match="Found 2 duplicate") as exc_info:
+        _validate_hash_uniqueness(str(experiment_file))
+
+    error_msg = str(exc_info.value)
+    assert "Found 2 duplicate" in error_msg
+    assert "abc123" in error_msg
+    assert "def456" in error_msg

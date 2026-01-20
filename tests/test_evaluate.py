@@ -53,6 +53,7 @@ def experiment_data(temp_dir):
             "retrieved_contexts": ["Context about weather"],
             "reference": "Expected answer",
             "response": "The weather is sunny.",
+            "sample_hash": "abc123def456",
             "trace_id": "a1b2c3d4e5f6789012345678901234ab",
         }
     ]
@@ -115,9 +116,17 @@ def test_overall_scores_calculation(tmp_path):
         input_tokens = 100
         output_tokens = 50
 
+    class MockSample:
+        def get_features(self):
+            return []
+
+    class MockDataset:
+        samples = [MockSample()]
+
     class MockResult:
         _repr_dict = {"faithfulness": 0.8, "answer_relevancy": 0.75}
         cost_cb = None
+        dataset = MockDataset()
 
         def to_pandas(self):
             return pd.DataFrame({"faithfulness": [0.9, 0.8, 0.7], "answer_relevancy": [0.85, 0.75, 0.65]})
@@ -155,9 +164,17 @@ def test_individual_results_present(tmp_path):
         input_tokens = 100
         output_tokens = 50
 
+    class MockSample:
+        def get_features(self):
+            return []
+
+    class MockDataset:
+        samples = [MockSample()]
+
     class MockResult:
         _repr_dict = {"faithfulness": 0.85}
         cost_cb = None
+        dataset = MockDataset()
 
         def to_pandas(self):
             return pd.DataFrame({"user_input": ["Q1", "Q2"], "faithfulness": [0.9, 0.8]})
@@ -191,9 +208,17 @@ def test_token_usage_placeholders(tmp_path):
         input_tokens = 150
         output_tokens = 75
 
+    class MockSample:
+        def get_features(self):
+            return []
+
+    class MockDataset:
+        samples = [MockSample()]
+
     class MockResult:
         _repr_dict = {"faithfulness": 0.9}
         cost_cb = None  # This causes placeholders to be used
+        dataset = MockDataset()
 
         def to_pandas(self):
             return pd.DataFrame({"faithfulness": [0.9]})
@@ -229,9 +254,17 @@ def test_trace_id_preservation(tmp_path):
             f.write(json.dumps(item) + "\n")
 
     # Create mock result
+    class MockSample:
+        def get_features(self):
+            return []
+
+    class MockDataset:
+        samples = [MockSample()]
+
     class MockResult:
         _repr_dict = {"faithfulness": 0.85}
         cost_cb = None
+        dataset = MockDataset()
 
         def to_pandas(self):
             return pd.DataFrame(
@@ -322,9 +355,17 @@ def test_main_successful_execution(experiment_data, monkeypatch, tmp_path):
             input_tokens = 100
             output_tokens = 50
 
+        class MockSample:
+            def get_features(self):
+                return []
+
+        class MockDataset:
+            samples = [MockSample()]
+
         class MockEvaluationResult(EvaluationResult):
             _repr_dict = {"faithfulness": 0.85}
             cost_cb = None
+            dataset = MockDataset()
 
             def __init__(self):
                 # Don't call super().__init__ to avoid initialization requirements

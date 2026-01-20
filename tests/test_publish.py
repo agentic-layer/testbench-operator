@@ -17,13 +17,13 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 from publish import (
     EvaluationData,
-    _get_user_input_hash,
     _get_user_input_truncated,
     _is_metric_value,
     create_and_push_metrics,
     load_evaluation_data,
     publish_metrics,
 )
+from run import _get_sample_hash
 
 
 # Mock classes for OpenTelemetry meter provider (used by HTTPXClientInstrumentor)
@@ -75,6 +75,7 @@ def evaluation_scores_file(temp_dir):
             {
                 "user_input": "What is the weather?",
                 "response": "It is sunny.",
+                "sample_hash": "abc123def456",
                 "faithfulness": 0.85,
                 "answer_relevancy": 0.90,
                 "trace_id": "a1b2c3d4e5f6789012345678901234aa",
@@ -82,6 +83,7 @@ def evaluation_scores_file(temp_dir):
             {
                 "user_input": "What is the time?",
                 "response": "It is noon.",
+                "sample_hash": "def456abc123",
                 "faithfulness": 0.80,
                 "answer_relevancy": 0.95,
                 "trace_id": "b2c3d4e5f6a7890123456789012345bb",
@@ -112,6 +114,7 @@ def realistic_scores_file(temp_dir):
             {
                 "user_input": "What is the weather?",
                 "response": "It is sunny.",
+                "sample_hash": "abc123def456",
                 "faithfulness": 0.85,
                 "answer_relevancy": 0.90,
                 "context_precision": 0.78,
@@ -157,50 +160,50 @@ def test_is_metric_value_with_non_numeric():
     assert _is_metric_value(None) is False
 
 
-# Test _get_user_input_hash
-def test_get_user_input_hash_returns_12_char_hex():
-    """Test that _get_user_input_hash returns a 12-character hex string"""
-    result = _get_user_input_hash("What is the weather?")
+# Test _get_sample_hash
+def test_get_sample_hash_returns_12_char_hex():
+    """Test that _get_sample_hash returns a 12-character hex string"""
+    result = _get_sample_hash("What is the weather?")
     assert len(result) == 12
     assert all(c in "0123456789abcdef" for c in result)
 
 
-def test_get_user_input_hash_is_deterministic():
-    """Test that _get_user_input_hash returns the same hash for the same input"""
+def test_get_sample_hash_is_deterministic():
+    """Test that _get_sample_hash returns the same hash for the same input"""
     input_text = "What is the weather in New York?"
-    assert _get_user_input_hash(input_text) == _get_user_input_hash(input_text)
+    assert _get_sample_hash(input_text) == _get_sample_hash(input_text)
 
 
-def test_get_user_input_hash_different_for_different_inputs():
-    """Test that _get_user_input_hash returns different hashes for different inputs"""
-    hash1 = _get_user_input_hash("Question 1")
-    hash2 = _get_user_input_hash("Question 2")
+def test_get_sample_hash_different_for_different_inputs():
+    """Test that _get_sample_hash returns different hashes for different inputs"""
+    hash1 = _get_sample_hash("Question 1")
+    hash2 = _get_sample_hash("Question 2")
     assert hash1 != hash2
 
 
-def test_get_user_input_hash_with_list():
-    """Test that _get_user_input_hash handles list inputs (multi-turn conversations)"""
+def test_get_sample_hash_with_list():
+    """Test that _get_sample_hash handles list inputs (multi-turn conversations)"""
     list_input = [
         {"content": "Hello", "type": "human"},
         {"content": "Hi there!", "type": "ai"},
         {"content": "How are you?", "type": "human"},
     ]
-    result = _get_user_input_hash(list_input)
+    result = _get_sample_hash(list_input)
     assert len(result) == 12
     assert all(c in "0123456789abcdef" for c in result)
 
 
-def test_get_user_input_hash_list_is_deterministic():
-    """Test that _get_user_input_hash returns same hash for same list input"""
+def test_get_sample_hash_list_is_deterministic():
+    """Test that _get_sample_hash returns same hash for same list input"""
     list_input = [{"content": "Test message", "type": "human"}]
-    assert _get_user_input_hash(list_input) == _get_user_input_hash(list_input)
+    assert _get_sample_hash(list_input) == _get_sample_hash(list_input)
 
 
-def test_get_user_input_hash_different_lists_different_hashes():
+def test_get_sample_hash_different_lists_different_hashes():
     """Test that different list inputs produce different hashes"""
     list1 = [{"content": "Message 1", "type": "human"}]
     list2 = [{"content": "Message 2", "type": "human"}]
-    assert _get_user_input_hash(list1) != _get_user_input_hash(list2)
+    assert _get_sample_hash(list1) != _get_sample_hash(list2)
 
 
 # Test _get_user_input_truncated
@@ -274,8 +277,20 @@ def test_creates_gauges_for_each_metric(monkeypatch):
     """Test that a Gauge is created for each metric plus token/cost gauges"""
     evaluation_data = EvaluationData(
         individual_results=[
-            {"user_input": "Question 1", "faithfulness": 0.85, "answer_relevancy": 0.90, "trace_id": "trace1"},
-            {"user_input": "Question 2", "faithfulness": 0.80, "answer_relevancy": 0.95, "trace_id": "trace2"},
+            {
+                "user_input": "Question 1",
+                "sample_hash": "abc123",
+                "faithfulness": 0.85,
+                "answer_relevancy": 0.90,
+                "trace_id": "trace1",
+            },
+            {
+                "user_input": "Question 2",
+                "sample_hash": "def456",
+                "faithfulness": 0.80,
+                "answer_relevancy": 0.95,
+                "trace_id": "trace2",
+            },
         ],
         total_tokens={"input_tokens": 1000, "output_tokens": 200},
         total_cost=0.05,
@@ -347,9 +362,15 @@ def test_sets_per_sample_gauge_values(monkeypatch):
     """Test that gauge values are set for each sample with all required attributes"""
     evaluation_data = EvaluationData(
         individual_results=[
-            {"user_input": "Question 1", "faithfulness": 0.85, "trace_id": "d4e5f6a7b8c9012345678901234567dd"},
+            {
+                "user_input": "Question 1",
+                "sample_hash": _get_sample_hash("Question 1"),
+                "faithfulness": 0.85,
+                "trace_id": "d4e5f6a7b8c9012345678901234567dd",
+            },
             {
                 "user_input": "This is a very long question that exceeds fifty characters in length",
+                "sample_hash": _get_sample_hash("This is a very long question that exceeds fifty characters in length"),
                 "faithfulness": 0.80,
                 "trace_id": "e5f6a7b8c9d0123456789012345678ee",
             },
@@ -427,7 +448,7 @@ def test_sets_per_sample_gauge_values(monkeypatch):
     assert faithfulness_calls[0]["attributes"]["execution_id"] == "exec-test-123"
     assert faithfulness_calls[0]["attributes"]["execution_number"] == 42
     assert faithfulness_calls[0]["attributes"]["trace_id"] == "d4e5f6a7b8c9012345678901234567dd"
-    assert faithfulness_calls[0]["attributes"]["user_input_hash"] == _get_user_input_hash("Question 1")
+    assert faithfulness_calls[0]["attributes"]["sample_hash"] == _get_sample_hash("Question 1")
     assert faithfulness_calls[0]["attributes"]["user_input_truncated"] == "Question 1"
 
     # Second sample: long question (should be truncated)
@@ -436,14 +457,21 @@ def test_sets_per_sample_gauge_values(monkeypatch):
     assert faithfulness_calls[1]["attributes"]["execution_id"] == "exec-test-123"
     assert faithfulness_calls[1]["attributes"]["execution_number"] == 42
     assert faithfulness_calls[1]["attributes"]["trace_id"] == "e5f6a7b8c9d0123456789012345678ee"
-    assert faithfulness_calls[1]["attributes"]["user_input_hash"] == _get_user_input_hash(long_question)
+    assert faithfulness_calls[1]["attributes"]["sample_hash"] == _get_sample_hash(long_question)
     assert faithfulness_calls[1]["attributes"]["user_input_truncated"] == _get_user_input_truncated(long_question)
 
 
 def test_pushes_via_otlp(monkeypatch):
     """Test that metrics are pushed via OTLP"""
     evaluation_data = EvaluationData(
-        individual_results=[{"user_input": "Q1", "faithfulness": 0.85, "trace_id": "f6a7b8c9d0e1234567890123456789ff"}],
+        individual_results=[
+            {
+                "user_input": "Q1",
+                "sample_hash": "abc123",
+                "faithfulness": 0.85,
+                "trace_id": "f6a7b8c9d0e1234567890123456789ff",
+            }
+        ],
         total_tokens={"input_tokens": 100, "output_tokens": 50},
         total_cost=0.01,
     )
@@ -512,7 +540,14 @@ def test_pushes_via_otlp(monkeypatch):
 def test_handles_push_error(monkeypatch):
     """Test error handling when OTLP export fails"""
     evaluation_data = EvaluationData(
-        individual_results=[{"user_input": "Q1", "faithfulness": 0.85, "trace_id": "a7b8c9d0e1f2345678901234567890aa"}],
+        individual_results=[
+            {
+                "user_input": "Q1",
+                "sample_hash": "abc123",
+                "faithfulness": 0.85,
+                "trace_id": "a7b8c9d0e1f2345678901234567890aa",
+            }
+        ],
         total_tokens={"input_tokens": 0, "output_tokens": 0},
         total_cost=0.0,
     )

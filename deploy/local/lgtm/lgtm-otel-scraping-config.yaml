@@ -15,13 +15,6 @@ data:
             cors:
               allowed_origins:
                 - http://*
-      prometheus/collector:
-        config:
-          scrape_configs:
-            - job_name: "opentelemetry-collector"
-              scrape_interval: 1s
-              static_configs:
-                - targets: ["127.0.0.1:8888"]
       prometheus/testkube:
         config:
           scrape_configs:
@@ -65,7 +58,7 @@ data:
           exporters: [otlphttp/traces]
           #exporters: [otlphttp/traces,debug/traces]
         metrics:
-          receivers: [otlp, prometheus/collector, prometheus/testkube]
+          receivers: [otlp, prometheus/testkube]
           processors: [batch]
           exporters: [otlphttp/metrics]
           #exporters: [otlphttp/metrics,debug/metrics]

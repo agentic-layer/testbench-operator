@@ -38,7 +38,7 @@ helm_resource(
     'testkube',
     'oci://docker.io/kubeshop/testkube',
     namespace='testkube',
-    flags=['--version=2.4.2', '--create-namespace', '--values=deploy/local/testkube/values.yaml', '--wait',
+    flags=['--version=2.5.3', '--create-namespace', '--values=deploy/local/testkube/values.yaml', '--wait',
     '--wait-for-jobs', '--timeout=10m'],
 )
 
