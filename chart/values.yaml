@@ -4,7 +4,7 @@ namespace:
   # Create namespace if it doesn't exist
   create: true
   # Namespace name
-  name: testbench
+  name: testkube
 
 image:
   repository: ghcr.io/agentic-layer/testbench/testworkflows
