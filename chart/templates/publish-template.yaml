@@ -1,0 +1,29 @@
+apiVersion: testworkflows.testkube.io/v1
+kind: TestWorkflowTemplate
+metadata:
+  name: ragas-publish-template
+  namespace: {{ include "testbench.namespace" . }}
+  labels:
+    {{- include "testbench.labels" . | nindent 4 }}
+    {{- include "testbench.workflowLabels" . | nindent 4 }}
+
+spec:
+
+  config:
+    otelExporterOtlpEndpoint:
+      type: string
+      description: "OTel Collector endpoint for exporting traces and metrics"
+      default: "http://lgtm.monitoring:4318"
+
+  # Steps to execute
+  steps:
+    - name: publish-metrics
+      run:
+        args:
+          - publish.py
+          - "{{`{{ workflow.name }}`}}"
+          - "{{`{{ execution.id }}`}}"
+          - "{{`{{ execution.number }}`}}"
+        env:
+          - name: OTEL_EXPORTER_OTLP_ENDPOINT
+            value: "{{`{{ config.otelExporterOtlpEndpoint }}`}}"

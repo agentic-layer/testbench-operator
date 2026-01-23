@@ -4,7 +4,6 @@ resources:
   - lgtm/
   - weather-agent.yaml
   - dataset.yaml
-  - ../base
   - multi-turn-metrics-configmap.yaml
   - multi-turn-workflow.yaml
   - multi-turn-workflow-trigger.yaml
