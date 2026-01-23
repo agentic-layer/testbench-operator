@@ -1,0 +1,22 @@
+apiVersion: testworkflows.testkube.io/v1
+kind: TestWorkflowTemplate
+metadata:
+  name: ragas-visualize-template
+  namespace: {{ include "testbench.namespace" . }}
+  labels:
+    {{- include "testbench.labels" . | nindent 4 }}
+    {{- include "testbench.workflowLabels" . | nindent 4 }}
+
+spec:
+  # Steps to execute
+  steps:
+    - name: visualize-metrics
+      artifacts:
+        paths:
+          - "data/results/evaluation_report.html"
+      run:
+        args:
+          - visualize.py
+          - "{{`{{ workflow.name }}`}}"
+          - "{{`{{ execution.id }}`}}"
+          - "{{`{{ execution.number }}`}}"

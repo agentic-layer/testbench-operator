@@ -1,62 +1,30 @@
-name: CI
+name: Check
 
 on:
-  workflow_dispatch:
-  pull_request:
   push:
     branches:
       - main
       - 'renovate/**'
+  pull_request:
 
 jobs:
-  check:
-    name: Code Quality Checks
+  python:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Clone the code
-        uses: 'actions/checkout@v5'
+      - name: Checkout
+        uses: 'actions/checkout@v6'
 
       - name: Install uv
-        uses: 'astral-sh/setup-uv@v6'
+        uses: 'astral-sh/setup-uv@v7'
         with:
-          version: "0.8.17"
+          version: "0.9.26"
           enable-cache: true
-
-      - name: Setup Python
-        uses: 'actions/setup-python@v6'
-        with:
-          python-version-file: ".python-version"
 
       - name: Install Dependencies
         run: uv sync
 
       - name: Run Checks
         run: uv run poe check
-
-  test:
-    name: Unit Tests
-    runs-on: ubuntu-latest
-    permissions:
-      contents: 'read'
-
-    steps:
-      - name: Clone the code
-        uses: 'actions/checkout@v5'
-
-      - name: Install uv
-        uses: 'astral-sh/setup-uv@v6'
-        with:
-          version: "0.8.17"
-          enable-cache: true
-
-      - name: Setup Python
-        uses: 'actions/setup-python@v6'
-        with:
-          python-version-file: ".python-version"
-
-      - name: Install Dependencies
-        run: uv sync
 
       - name: Run Tests
         run: uv run poe test
@@ -83,6 +51,20 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
+  helm:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: 'actions/checkout@v6'
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: 'v3.14.0'
+
+      - name: Lint Helm Chart
+        run: helm lint chart/
+
   test-e2e:
     name: E2E Tests
     runs-on: ubuntu-latest
@@ -92,8 +74,8 @@ jobs:
       GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
 
     steps:
-      - name: Clone the code
-        uses: 'actions/checkout@v5'
+      - name: Checkout
+        uses: 'actions/checkout@v6'
 
       - name: Extract image tag
         id: extract-tag

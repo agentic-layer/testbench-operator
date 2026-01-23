@@ -38,11 +38,22 @@ helm_resource(
     'testkube',
     'oci://docker.io/kubeshop/testkube',
     namespace='testkube',
-    flags=['--version=2.5.3', '--create-namespace', '--values=deploy/local/testkube/values.yaml', '--wait',
+    flags=['--version=2.5.3', '--values=deploy/local/testkube/values.yaml', '--wait',
     '--wait-for-jobs', '--timeout=10m'],
 )
 
-# Apply Kubernetes manifests
+# Deploy testbench Helm chart
+k8s_yaml(helm(
+    'chart',
+    name='testbench',
+    namespace='testkube',
+    values=['chart/values.yaml'],
+    set=[
+        'image.repository=testworkflows',
+    ],
+))
+
+# Apply local development manifests
 k8s_yaml(kustomize('deploy/local'))
 
 k8s_resource('ai-gateway-litellm', port_forwards=['11001:4000'])
