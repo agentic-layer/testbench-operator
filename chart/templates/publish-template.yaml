@@ -19,6 +19,7 @@ spec:
   steps:
     - name: publish-metrics
       run:
+        image: {{ include "testbench.image" . }}
         args:
           - publish.py
           - "{{`{{ workflow.name }}`}}"

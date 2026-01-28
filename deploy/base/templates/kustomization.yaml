@@ -1,8 +1,0 @@
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-resources:
-  - evaluate-template.yaml
-  - setup-template.yaml
-  - run-template.yaml
-  - publish-template.yaml
-  - visualize-template.yaml

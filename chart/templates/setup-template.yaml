@@ -24,6 +24,7 @@ spec:
         paths:
           - "data/datasets/ragas_dataset.jsonl"
       run:
+        image: {{ include "testbench.image" . }}
         args:
           - setup.py
           - "{{`{{ config.bucket }}`}}"

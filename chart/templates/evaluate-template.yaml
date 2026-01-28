@@ -24,6 +24,7 @@ spec:
         paths:
           - "data/results/evaluation_scores.json"
       run:
+        image: {{ include "testbench.image" . }}
         command:
           - sh
           - -c

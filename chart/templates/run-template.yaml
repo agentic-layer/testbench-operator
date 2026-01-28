@@ -25,6 +25,7 @@ spec:
         paths:
           - "data/experiments/ragas_experiment.jsonl"
       run:
+        image: {{ include "testbench.image" . }}
         args:
           - run.py
           - "{{`{{ config.agentUrl }}`}}"
