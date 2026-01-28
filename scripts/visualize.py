@@ -45,50 +45,97 @@ def _is_valid_metric_value(value: Any) -> TypeGuard[int | float]:
 
 def load_evaluation_data(file_path: str) -> VisualizationData:
     """
-    Load evaluation_scores.json and extract all necessary data.
+    Load ragas_evaluation.jsonl and extract all necessary data.
 
     Args:
-        file_path: Path to evaluation_scores.json
+        file_path: Path to ragas_evaluation.jsonl
 
     Returns:
         VisualizationData container with all evaluation data
 
     Raises:
         FileNotFoundError: If file doesn't exist
-        json.JSONDecodeError: If file is not valid JSON
-        ValueError: If required fields are missing
+        json.JSONDecodeError: If file is not valid JSONL
     """
     try:
+        # Read JSONL file (line-delimited JSON)
+        rows = []
         with open(file_path, "r") as f:
-            data = json.load(f)
+            for line in f:
+                if line.strip():
+                    rows.append(json.loads(line))
     except FileNotFoundError:
         logger.error(f"Input file not found: {file_path}")
-        logger.error("Have you run evaluate.py first?")
+        logger.error("Have you run evaluate.py first to generate ragas_evaluation.jsonl?")
         raise
     except json.JSONDecodeError as e:
         logger.error(f"Invalid JSON in {file_path}: {e}")
         raise
 
-    # Validate required fields
-    required_fields = ["overall_scores", "individual_results", "total_tokens", "total_cost"]
-    for field in required_fields:
-        if field not in data:
-            raise ValueError(f"Missing required field '{field}' in {file_path}")
+    # Handle empty file
+    if not rows:
+        logger.warning("Empty JSONL file. Returning empty VisualizationData.")
+        return VisualizationData(
+            overall_scores={},
+            individual_results=[],
+            total_tokens={"input_tokens": 0, "output_tokens": 0},
+            total_cost=0.0,
+            metric_names=[],
+        )
 
-    # Discover metric names from individual results
+    # Flatten individual_results from nested structure to top-level
+    flattened_results = []
+    for i, row in enumerate(rows):
+        nested_metrics = row.pop("individual_results", {})
+
+        # Skip rows without individual_results
+        if not nested_metrics:
+            logger.warning(f"Row {i} missing 'individual_results', skipping")
+            continue
+
+        # Merge nested metrics to top level
+        flat_row = {**row, **nested_metrics}
+
+        # Ensure trace_id exists
+        if "trace_id" not in flat_row:
+            logger.warning(f"Row {i} missing trace_id, generating placeholder")
+            flat_row["trace_id"] = f"missing-trace-{i}"
+
+        flattened_results.append(flat_row)
+
+    # Discover metric names from flattened results
     metric_names: set[str] = set()
-    reserved_fields = {"user_input", "response", "retrieved_contexts", "reference", "trace_id"}
+    reserved_fields = {
+        "user_input",
+        "response",
+        "retrieved_contexts",
+        "reference",
+        "trace_id",
+        "reference_tool_calls",
+        "sample_hash",
+    }
 
-    for result in data["individual_results"]:
+    for result in flattened_results:
         for key, value in result.items():
             if key not in reserved_fields and _is_valid_metric_value(value):
                 metric_names.add(key)
 
+    # Calculate overall_scores as mean of each metric across all rows
+    overall_scores = {}
+    for metric_name in metric_names:
+        scores = [
+            r[metric_name]
+            for r in flattened_results
+            if metric_name in r and _is_valid_metric_value(r[metric_name])
+        ]
+        if scores:
+            overall_scores[metric_name] = sum(scores) / len(scores)
+
     return VisualizationData(
-        overall_scores=data["overall_scores"],
-        individual_results=data["individual_results"],
-        total_tokens=data["total_tokens"],
-        total_cost=data["total_cost"],
+        overall_scores=overall_scores,
+        individual_results=flattened_results,
+        total_tokens={"input_tokens": 0, "output_tokens": 0},
+        total_cost=0.0,
         metric_names=sorted(list(metric_names)),
     )
 
@@ -669,8 +716,9 @@ def generate_summary_cards_html(chart_data: dict[str, Any]) -> str:
     """Generate HTML for summary statistics cards."""
     tokens = chart_data["tokens"]
     total_tokens = tokens.get("input_tokens", 0) + tokens.get("output_tokens", 0)
+    cost = chart_data["cost"]
 
-    return f"""
+    cards_html = f"""
 <section class="summary-section">
     <div class="card">
         <h3>Total Samples</h3>
@@ -680,17 +728,28 @@ def generate_summary_cards_html(chart_data: dict[str, Any]) -> str:
         <h3>Metrics Evaluated</h3>
         <p class="metric-value">{len(chart_data["overall_scores"])}</p>
     </div>
-    <div class="card">
+"""
+
+    # Only show tokens card if they have values
+    if total_tokens > 0:
+        cards_html += f"""    <div class="card">
         <h3>Total Tokens</h3>
         <p class="metric-value">{total_tokens:,}</p>
         <p class="metric-detail">Input: {tokens.get("input_tokens", 0):,} | Output: {tokens.get("output_tokens", 0):,}</p>
     </div>
-    <div class="card">
-        <h3>Total Cost</h3>
-        <p class="metric-value">${chart_data["cost"]:.4f}</p>
-    </div>
-</section>
 """
+
+    # Only show cost card if it has a value
+    if cost > 0:
+        cards_html += f"""    <div class="card">
+        <h3>Total Cost</h3>
+        <p class="metric-value">${cost:.4f}</p>
+    </div>
+"""
+
+    cards_html += """</section>
+"""
+    return cards_html
 
 
 def generate_overall_scores_chart_html() -> str:
@@ -1082,7 +1141,7 @@ def main(
     Main function to generate HTML visualization.
 
     Args:
-        input_file: Path to evaluation_scores.json
+        input_file: Path to ragas_evaluation.jsonl
         output_file: Path to output HTML file
         workflow_name: Name of the test workflow
         execution_id: Testkube execution ID for this workflow run
@@ -1139,8 +1198,8 @@ Examples:
     parser.add_argument(
         "--input",
         type=str,
-        default="data/results/evaluation_scores.json",
-        help="Path to evaluation_scores.json file (default: data/results/evaluation_scores.json)",
+        default="data/experiments/ragas_evaluation.jsonl",
+        help="Path to ragas_evaluation.jsonl file (default: data/experiments/ragas_evaluation.jsonl)",
     )
 
     parser.add_argument(

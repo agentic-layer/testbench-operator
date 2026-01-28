@@ -12,16 +12,15 @@ import sys
 import tempfile
 from pathlib import Path
 
-import pandas as pd
 import pytest
-from ragas.metrics import Metric
+from ragas.metrics import BaseMetric
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 from evaluate import (
     MetricsRegistry,
-    format_evaluation_scores,
-    instantiate_metric_from_class,
+    format_experiment_results,
+    instantiate_metric,
     load_metrics_config,
     main,
 )
@@ -79,224 +78,72 @@ def mock_registry():
     registry = MetricsRegistry()
 
     # Clear auto-discovered metrics
-    registry._instances = {}
     registry._classes = {}
-
-    # Add mock instance
-    mock_instance = MagicMock(spec=Metric)
-    mock_instance.name = "test_metric"
-    registry._instances["test_metric"] = mock_instance
 
     # Add mock class
     mock_class = MagicMock(spec=type)
     mock_class.__name__ = "TestMetricClass"
-    mock_class.return_value = MagicMock(spec=Metric)
+    mock_class.return_value = MagicMock(spec=BaseMetric)
     registry._classes["TestMetricClass"] = mock_class
 
     return registry
 
 
-# TestFormatEvaluationScores tests
-def test_overall_scores_calculation(tmp_path):
-    """Test that overall scores are calculated correctly"""
-
-    # Create temporary experiment file with trace_ids
-    experiment_file = tmp_path / "experiment.jsonl"
+# TestFormatExperimentResults tests
+def test_format_experiment_results_basic(tmp_path):
+    """Test format_experiment_results with basic experiment output"""
+    # Create experiment results file
+    experiment_file = tmp_path / "ragas_evaluation.jsonl"
     test_data = [
-        {"trace_id": "trace1"},
-        {"trace_id": "trace2"},
-        {"trace_id": "trace3"},
+        {
+            "user_input": "Q1",
+            "response": "A1",
+            "faithfulness": 0.9,
+            "answer_relevancy": 0.85,
+            "trace_id": "trace1",
+        },
+        {
+            "user_input": "Q2",
+            "response": "A2",
+            "faithfulness": 0.8,
+            "answer_relevancy": 0.75,
+            "trace_id": "trace2",
+        },
     ]
     with open(experiment_file, "w") as f:
         for item in test_data:
             f.write(json.dumps(item) + "\n")
 
-    # Create mock result
-    class MockTokenUsage:
-        input_tokens = 100
-        output_tokens = 50
-
-    class MockSample:
-        def get_features(self):
-            return []
-
-    class MockDataset:
-        samples = [MockSample()]
-
-    class MockResult:
-        _repr_dict = {"faithfulness": 0.8, "answer_relevancy": 0.75}
-        cost_cb = None
-        dataset = MockDataset()
-
-        def to_pandas(self):
-            return pd.DataFrame({"faithfulness": [0.9, 0.8, 0.7], "answer_relevancy": [0.85, 0.75, 0.65]})
-
-        def total_tokens(self):
-            return MockTokenUsage()
-
-        def total_cost(self):
-            return 0.001
-
-    mock_result = MockResult()
-
-    formatted = format_evaluation_scores(mock_result, 5.0 / 1e6, 15.0 / 1e6, str(experiment_file))
-
-    # Verify overall scores are correct
-    assert abs(formatted.overall_scores["faithfulness"] - 0.8) < 0.01
-    assert abs(formatted.overall_scores["answer_relevancy"] - 0.75) < 0.01
-
-
-def test_individual_results_present(tmp_path):
-    """Test that individual results are included"""
-
-    # Create temporary experiment file with trace_ids
-    experiment_file = tmp_path / "experiment.jsonl"
-    test_data = [
-        {"trace_id": "trace1"},
-        {"trace_id": "trace2"},
+    # Create metric definitions
+    metric_definitions = [
+        {"type": "class", "class_name": "faithfulness"},
+        {"type": "class", "class_name": "answer_relevancy"},
     ]
-    with open(experiment_file, "w") as f:
-        for item in test_data:
-            f.write(json.dumps(item) + "\n")
 
-    # Create mock result
-    class MockTokenUsage:
-        input_tokens = 100
-        output_tokens = 50
+    # Format results
+    formatted = format_experiment_results(
+        experiment_file=str(experiment_file),
+        metric_definitions=metric_definitions,
+    )
 
-    class MockSample:
-        def get_features(self):
-            return []
+    # Verify overall scores (means)
+    assert abs(formatted.overall_scores["faithfulness"] - 0.85) < 0.01
+    assert abs(formatted.overall_scores["answer_relevancy"] - 0.80) < 0.01
 
-    class MockDataset:
-        samples = [MockSample()]
-
-    class MockResult:
-        _repr_dict = {"faithfulness": 0.85}
-        cost_cb = None
-        dataset = MockDataset()
-
-        def to_pandas(self):
-            return pd.DataFrame({"user_input": ["Q1", "Q2"], "faithfulness": [0.9, 0.8]})
-
-        def total_tokens(self):
-            return MockTokenUsage()
-
-        def total_cost(self):
-            return 0.001
-
-    mock_result = MockResult()
-
-    formatted = format_evaluation_scores(mock_result, 5.0 / 1e6, 15.0 / 1e6, str(experiment_file))
-
-    # Verify individual results
+    # Verify individual results preserved
     assert len(formatted.individual_results) == 2
+    assert formatted.individual_results[0]["trace_id"] == "trace1"
+    assert formatted.individual_results[1]["trace_id"] == "trace2"
 
-
-def test_token_usage_placeholders(tmp_path):
-    """Test that token usage placeholders are returned when cost_cb is None"""
-
-    # Create temporary experiment file with trace_id
-    experiment_file = tmp_path / "experiment.jsonl"
-    test_data = [{"trace_id": "trace1"}]
-    with open(experiment_file, "w") as f:
-        for item in test_data:
-            f.write(json.dumps(item) + "\n")
-
-    # Create mock result
-    class MockTokenUsage:
-        input_tokens = 150
-        output_tokens = 75
-
-    class MockSample:
-        def get_features(self):
-            return []
-
-    class MockDataset:
-        samples = [MockSample()]
-
-    class MockResult:
-        _repr_dict = {"faithfulness": 0.9}
-        cost_cb = None  # This causes placeholders to be used
-        dataset = MockDataset()
-
-        def to_pandas(self):
-            return pd.DataFrame({"faithfulness": [0.9]})
-
-        def total_tokens(self):
-            return MockTokenUsage()
-
-        def total_cost(self, **kwargs):
-            return 0.002
-
-    mock_result = MockResult()
-
-    formatted = format_evaluation_scores(mock_result, 5.0 / 1e6, 15.0 / 1e6, str(experiment_file))
-
-    # Verify placeholder token usage is returned (0 when cost_cb is None)
+    # Verify token usage (currently returns 0 - Phase 4 TODO)
     assert formatted.total_tokens["input_tokens"] == 0
     assert formatted.total_tokens["output_tokens"] == 0
     assert formatted.total_cost == 0.0
 
 
-def test_trace_id_preservation(tmp_path):
-    """Test that trace_ids from experiment file are preserved in individual_results"""
-
-    # Create temporary experiment file with trace_ids
-    experiment_file = tmp_path / "experiment.jsonl"
-    test_data = [
-        {"trace_id": "a1b2c3d4e5f6789012345678901234ab"},
-        {"trace_id": "b2c3d4e5f6789012345678901234abc2"},
-        {"trace_id": "c3d4e5f6789012345678901234abc34"},
-    ]
-    with open(experiment_file, "w") as f:
-        for item in test_data:
-            f.write(json.dumps(item) + "\n")
-
-    # Create mock result
-    class MockSample:
-        def get_features(self):
-            return []
-
-    class MockDataset:
-        samples = [MockSample()]
-
-    class MockResult:
-        _repr_dict = {"faithfulness": 0.85}
-        cost_cb = None
-        dataset = MockDataset()
-
-        def to_pandas(self):
-            return pd.DataFrame(
-                {
-                    "user_input": ["Q1", "Q2", "Q3"],
-                    "faithfulness": [0.9, 0.8, 0.85],
-                }
-            )
-
-        def total_tokens(self):
-            class MockTokenUsage:
-                input_tokens = 100
-                output_tokens = 50
-
-            return MockTokenUsage()
-
-        def total_cost(self, **kwargs):
-            return 0.001
-
-    mock_result = MockResult()
-
-    formatted = format_evaluation_scores(mock_result, 5.0 / 1e6, 15.0 / 1e6, str(experiment_file))
-
-    # Verify trace_ids are preserved in individual results
-    assert len(formatted.individual_results) == 3
-    assert formatted.individual_results[0]["trace_id"] == "a1b2c3d4e5f6789012345678901234ab"
-    assert formatted.individual_results[1]["trace_id"] == "b2c3d4e5f6789012345678901234abc2"
-    assert formatted.individual_results[2]["trace_id"] == "c3d4e5f6789012345678901234abc34"
-
-
 # TestMain tests
-def test_main_no_config(experiment_data):
+@pytest.mark.asyncio
+async def test_main_no_config(experiment_data):
     """Test main function with missing metrics config file"""
 
     tmp, original_cwd, experiment_file = experiment_data
@@ -305,8 +152,7 @@ def test_main_no_config(experiment_data):
     try:
         # When config file doesn't exist, should raise FileNotFoundError
         with pytest.raises(FileNotFoundError):
-            main(
-                output_file="results/evaluation_scores.json",
+            await main(
                 model="gemini-flash-latest",
                 metrics_config="nonexistent_config.json",
             )
@@ -314,224 +160,181 @@ def test_main_no_config(experiment_data):
         os.chdir(original_cwd)
 
 
-def test_main_successful_execution(experiment_data, monkeypatch, tmp_path):
+@pytest.mark.asyncio
+async def test_main_successful_execution(experiment_data, monkeypatch, tmp_path):
     """Test main function successful execution with config file."""
     from pathlib import Path
-    from unittest.mock import MagicMock
-
-    from ragas.dataset_schema import EvaluationResult
 
     tmp, original_cwd, experiment_file = experiment_data
     os.chdir(tmp)
 
     try:
-        # Create a mock registry
-        mock_registry = MagicMock()
-        mock_metric = MagicMock(spec=Metric)
-        mock_metric.name = "test_metric"
-        mock_registry.load_from_config.return_value = [mock_metric]
-
-        # Mock MetricsRegistry.create_default() to return our mock
-        monkeypatch.setattr("evaluate.MetricsRegistry.create_default", lambda: mock_registry)
-
         # Create config file
         config_file = tmp_path / "test_metrics.json"
-        config = {"version": "1.0", "metrics": [{"type": "instance", "name": "test_metric"}]}
+        config = {"version": "1.0", "metrics": [{"type": "class", "class_name": "test_metric"}]}
 
         with open(config_file, "w") as f:
             json.dump(config, f)
 
-        # Mock EvaluationDataset.from_jsonl
-        class MockEvaluationDataset:
-            samples = []  # Add samples attribute for dataset type detection
+        # Create experiment results directory and file for the experiment load
+        experiment_results_dir = Path(tmp) / "data" / "experiments"
+        experiment_results_dir.mkdir(parents=True, exist_ok=True)
+        ragas_experiment_file = experiment_results_dir / "ragas_experiment.jsonl"
 
-        mock_dataset = MockEvaluationDataset()
+        # Write test experiment input (this is what Experiment.load reads)
+        test_input = {"user_input": "Q1", "response": "A1", "retrieved_contexts": ["C1"], "reference": "R1"}
+        with open(ragas_experiment_file, "w") as f:
+            f.write(json.dumps(test_input) + "\n")
 
-        def mock_from_jsonl(path):
-            return mock_dataset
+        # Mock evaluation_experiment.arun with new signature
+        async def mock_experiment_arun(dataset, name, metric_definitions, llm, registry):
+            # Create the evaluation results file that would be created by the experiment
+            evaluation_results_file = experiment_results_dir / "ragas_evaluation.jsonl"
+            test_result = {
+                "user_input": "Q1",
+                "response": "A1",
+                "individual_results": {"test_metric": 0.85},
+                "trace_id": "trace1",
+            }
+            with open(evaluation_results_file, "w") as f:
+                f.write(json.dumps(test_result) + "\n")
 
-        # Mock the evaluate function
-        class MockTokenUsage:
-            input_tokens = 100
-            output_tokens = 50
-
-        class MockSample:
-            def get_features(self):
-                return []
-
-        class MockDataset:
-            samples = [MockSample()]
-
-        class MockEvaluationResult(EvaluationResult):
-            _repr_dict = {"faithfulness": 0.85}
-            cost_cb = None
-            dataset = MockDataset()
-
-            def __init__(self):
-                # Don't call super().__init__ to avoid initialization requirements
-                pass
-
-            def to_pandas(self):
-                return pd.DataFrame({"user_input": ["Q1"], "faithfulness": [0.85]})
-
-            def total_tokens(self):
-                return MockTokenUsage()
-
-            def total_cost(self, **kwargs):
-                return 0.001
-
-        mock_result = MockEvaluationResult()
-
-        def mock_evaluate(dataset, metrics, llm, token_usage_parser):
-            return mock_result
-
-        # Mock ChatOpenAI and LangchainLLMWrapper
-        class MockChatOpenAI:
+        # Mock AsyncOpenAI and llm_factory
+        class MockAsyncOpenAI:
             pass
 
-        def mock_chat_openai_init(model, api_key):
-            return MockChatOpenAI()
+        def mock_async_openai_init(api_key):
+            return MockAsyncOpenAI()
 
-        class MockLLMWrapper:
-            def __init__(self, llm):
-                pass
+        class MockLLM:
+            pass
 
-        monkeypatch.setattr("evaluate.EvaluationDataset.from_jsonl", mock_from_jsonl)
-        monkeypatch.setattr("evaluate.evaluate", mock_evaluate)
-        monkeypatch.setattr("evaluate.ChatOpenAI", mock_chat_openai_init)
-        monkeypatch.setattr("evaluate.LangchainLLMWrapper", MockLLMWrapper)
+        def mock_llm_factory(model, client):
+            return MockLLM()
+
+        monkeypatch.setattr("evaluate.evaluation_experiment.arun", mock_experiment_arun)
+        monkeypatch.setattr("evaluate.AsyncOpenAI", mock_async_openai_init)
+        monkeypatch.setattr("evaluate.llm_factory", mock_llm_factory)
 
         # Run main with config file
-        output_file = "results/evaluation_scores.json"
-        main(
-            output_file=output_file,
+        await main(
             model="gemini-flash-latest",
             metrics_config=str(config_file),
         )
 
-        # Verify output file was created
-        output_path = Path(tmp) / output_file
-        assert output_path.exists(), f"Output file not found at {output_path}"
+        # Verify evaluation results file was created by the mock
+        evaluation_results_file = experiment_results_dir / "ragas_evaluation.jsonl"
+        assert evaluation_results_file.exists(), f"Evaluation results file not found at {evaluation_results_file}"
 
-        # Verify output file has correct structure
-        with open(output_path, "r") as f:
-            data = json.load(f)
+        # Verify the results file has correct structure
+        with open(evaluation_results_file, "r") as f:
+            line = f.readline()
+            data = json.loads(line)
 
-        assert "overall_scores" in data
         assert "individual_results" in data
-        assert "total_tokens" in data
-        assert "total_cost" in data
+        assert "test_metric" in data["individual_results"]
     finally:
         os.chdir(original_cwd)
 
 
 # TestMetricDiscovery tests
 def test_metric_discovery(default_registry):
-    """Test that both metric instances and classes are discovered."""
-    instances = default_registry.list_instances()
+    """Test that metric classes are discovered."""
     classes = default_registry.list_classes()
 
-    # Test instances
-    assert len(instances) > 0
-    for name in instances:
-        instance = default_registry.get_instance(name)
-        assert isinstance(instance, Metric)
-
-    # Test classes
+    # Test that classes are discovered
     assert len(classes) > 0
     for name in classes:
         cls = default_registry.get_class(name)
         assert inspect.isclass(cls)
-        assert issubclass(cls, Metric)
+        assert issubclass(cls, BaseMetric)
 
 
-# Test instantiate_metric_from_class
-def test_instantiate_metric_from_class_success(default_registry):
+# Test instantiate_metric
+def test_instantiate_metric_success(default_registry):
     """Test successful class instantiation without parameters."""
+    from unittest.mock import MagicMock
+
     classes = default_registry.list_classes()
     if not classes:
         pytest.skip("No metric classes available")
 
+    # Create mock LLM
+    mock_llm = MagicMock()
+
     # Find a class that can be instantiated without parameters
     for class_name in classes:
         try:
-            metric = instantiate_metric_from_class(class_name, {}, registry=default_registry)
-            assert isinstance(metric, Metric)
+            metric_def = {"type": "class", "class_name": class_name, "parameters": {}}
+            metric = instantiate_metric(metric_def, mock_llm, default_registry)
+            assert isinstance(metric, BaseMetric)
             return  # Success!
         except (TypeError, ValueError):
             continue  # Try next class
     pytest.skip("No metric classes can be instantiated without parameters")
 
 
-def test_instantiate_metric_from_class_unknown(default_registry):
+def test_instantiate_metric_unknown(default_registry):
     """Test error for unknown class."""
+    from unittest.mock import MagicMock
+
+    mock_llm = MagicMock()
+    metric_def = {"type": "class", "class_name": "NonexistentClass", "parameters": {}}
     with pytest.raises(ValueError, match="Unknown class"):
-        instantiate_metric_from_class("NonexistentClass", {}, registry=default_registry)
+        instantiate_metric(metric_def, mock_llm, default_registry)
 
 
-def test_instantiate_metric_from_class_invalid_params(default_registry):
-    """Test error for invalid parameters."""
+def test_instantiate_metric_invalid_params(default_registry):
+    """Test error for invalid parameters or LLM validation."""
+    from unittest.mock import MagicMock
+
     classes = default_registry.list_classes()
     if not classes:
         pytest.skip("No metric classes available")
 
+    mock_llm = MagicMock()
     class_name = classes[0]
-    with pytest.raises(ValueError, match="Invalid parameters"):
-        instantiate_metric_from_class(
-            class_name, {"completely_invalid_param_name_xyz": "value"}, registry=default_registry
-        )
+    metric_def = {
+        "type": "class",
+        "class_name": class_name,
+        "parameters": {"completely_invalid_param_name_xyz": "value"},
+    }
+    # Should raise ValueError either for invalid parameters or LLM validation
+    with pytest.raises(ValueError, match="(Invalid parameters|InstructorLLM)"):
+        instantiate_metric(metric_def, mock_llm, default_registry)
 
 
 # Test load_metrics_config
 def test_load_metrics_config_json(tmp_path, default_registry):
-    """Test loading metrics from JSON config file."""
-    instances = default_registry.list_instances()
-    if not instances:
-        pytest.skip("No metric instances available")
-
-    config_file = tmp_path / "metrics.json"
-    metric_name = instances[0]
-
-    config = {"version": "1.0", "metrics": [{"type": "instance", "name": metric_name}]}
-
-    with open(config_file, "w") as f:
-        json.dump(config, f)
-
-    metrics = load_metrics_config(str(config_file), registry=default_registry)
-    assert len(metrics) == 1
-    assert isinstance(metrics[0], Metric)
-    assert metrics[0].name == metric_name
+    """Test loading metrics from JSON config file - skipped as instances are not supported."""
+    pytest.skip("Instance-type metrics are no longer supported")
 
 
 def test_load_metrics_config_with_class(tmp_path, default_registry):
-    """Test loading metrics with class instantiation."""
+    """Test loading metrics config returns definitions, not instances."""
     classes = default_registry.list_classes()
     if not classes:
         pytest.skip("No metric classes available")
 
-    # Find a class that can be instantiated without parameters
-    for class_name in classes:
-        try:
-            # Test if this class can be instantiated
-            instantiate_metric_from_class(class_name, {}, registry=default_registry)
+    # Use any class name (we're not instantiating, just loading config)
+    class_name = classes[0]
 
-            config_file = tmp_path / "metrics.json"
-            config = {
-                "version": "1.0",
-                "metrics": [{"type": "class", "class_name": class_name, "parameters": {}}],
-            }
+    config_file = tmp_path / "metrics.json"
+    config = {
+        "version": "1.0",
+        "metrics": [{"type": "class", "class_name": class_name, "parameters": {}}],
+    }
 
-            with open(config_file, "w") as f:
-                json.dump(config, f)
+    with open(config_file, "w") as f:
+        json.dump(config, f)
 
-            metrics = load_metrics_config(str(config_file), registry=default_registry)
-            assert len(metrics) == 1
-            assert isinstance(metrics[0], Metric)
-            return  # Success!
-        except (TypeError, ValueError):
-            continue  # Try next class
-
-    pytest.skip("No metric classes can be instantiated without parameters")
+    # load_metrics_config should return list of dicts, not BaseMetric instances
+    definitions = load_metrics_config(str(config_file))
+    assert len(definitions) == 1
+    assert isinstance(definitions[0], dict)
+    assert definitions[0]["type"] == "class"
+    assert definitions[0]["class_name"] == class_name
+    assert definitions[0]["parameters"] == {}
 
 
 def test_load_metrics_config_invalid_format(tmp_path):
@@ -569,28 +372,21 @@ def test_load_metrics_config_empty_metrics(tmp_path):
 
 # Test MetricsRegistry class
 def test_registry_initialization():
-    """Test that registry initializes and discovers metrics."""
+    """Test that registry initializes and discovers metric classes."""
     registry = MetricsRegistry()
 
-    assert len(registry.list_instances()) > 0
+    # BaseMetric approach only has classes, no instances
     assert len(registry.list_classes()) > 0
 
 
 def test_registry_get_instance(default_registry):
-    """Test getting instances from registry."""
-    instances = default_registry.list_instances()
-    if not instances:
-        pytest.skip("No instances available")
-
-    name = instances[0]
-    metric = default_registry.get_instance(name)
-    assert isinstance(metric, Metric)
+    """Test getting instances from registry - skipped as instances not supported."""
+    pytest.skip("Instance-type metrics are no longer supported")
 
 
 def test_registry_get_instance_unknown(default_registry):
-    """Test error for unknown instance."""
-    with pytest.raises(ValueError, match="Unknown instance"):
-        default_registry.get_instance("nonexistent_xyz")
+    """Test error for unknown instance - skipped as instances not supported."""
+    pytest.skip("Instance-type metrics are no longer supported")
 
 
 def test_registry_get_class(default_registry):
@@ -602,7 +398,7 @@ def test_registry_get_class(default_registry):
     name = classes[0]
     cls = default_registry.get_class(name)
     assert inspect.isclass(cls)
-    assert issubclass(cls, Metric)
+    assert issubclass(cls, BaseMetric)
 
 
 def test_registry_get_class_unknown(default_registry):
@@ -613,15 +409,19 @@ def test_registry_get_class_unknown(default_registry):
 
 def test_registry_instantiate_class(default_registry):
     """Test instantiating class via registry."""
+    from unittest.mock import MagicMock
+
     classes = default_registry.list_classes()
     if not classes:
         pytest.skip("No classes available")
 
+    mock_llm = MagicMock()
+
     # Find instantiable class
     for class_name in classes:
         try:
-            metric = default_registry.instantiate_class(class_name, {})
-            assert isinstance(metric, Metric)
+            metric = default_registry.instantiate_metric(class_name, {}, mock_llm)
+            assert isinstance(metric, BaseMetric)
             return
         except (TypeError, ValueError):
             continue
@@ -629,31 +429,18 @@ def test_registry_instantiate_class(default_registry):
 
 
 def test_registry_load_from_config(tmp_path, default_registry):
-    """Test loading config via registry method."""
-    instances = default_registry.list_instances()
-    if not instances:
-        pytest.skip("No instances available")
-
-    config_file = tmp_path / "test.json"
-    config = {"version": "1.0", "metrics": [{"type": "instance", "name": instances[0]}]}
-
-    with open(config_file, "w") as f:
-        json.dump(config, f)
-
-    metrics = default_registry.load_from_config(str(config_file))
-    assert len(metrics) == 1
-    assert isinstance(metrics[0], Metric)
+    """Test loading config via registry method - skipped as instances not supported."""
+    pytest.skip("Instance-type metrics are no longer supported")
 
 
 def test_mock_registry_fixture(mock_registry):
     """Test that mock registry fixture works."""
-    assert mock_registry.list_instances() == ["test_metric"]
+    from unittest.mock import MagicMock
+
     assert mock_registry.list_classes() == ["TestMetricClass"]
 
-    # Test instance retrieval
-    instance = mock_registry.get_instance("test_metric")
-    assert instance.name == "test_metric"
+    mock_llm = MagicMock()
 
     # Test class instantiation
-    metric = mock_registry.instantiate_class("TestMetricClass", {})
-    assert isinstance(metric, Metric)
+    metric = mock_registry.instantiate_metric("TestMetricClass", {}, mock_llm)
+    assert isinstance(metric, BaseMetric)

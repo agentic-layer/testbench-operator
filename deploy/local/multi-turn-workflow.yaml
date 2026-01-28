@@ -21,6 +21,9 @@ spec:
             name: multi-turn-metrics-config
             key: metrics.yaml
 
+  container:
+    image: ghcr.io/agentic-layer/testbench/testworkflows:latest
+
   use:
   - name: ragas-run-template
     config:

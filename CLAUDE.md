@@ -271,9 +271,11 @@ make run
 - **Multi-Turn Support**: For conversational datasets, sequentially queries agent for each user message while maintaining context_id
 
 **Phase 3: Evaluate** (`scripts/evaluate.py`)
-- **Input**: `data/experiments/ragas_experiment.jsonl` + LLM model + metrics list
+- **Input**: `data/experiments/ragas_experiment.jsonl` + LLM model + metrics config file
 - **Output**: `data/results/evaluation_scores.json`
-- **Purpose**: Calculates RAGAS metrics using LLM-as-a-judge via AI Gateway, tracks tokens and costs
+- **Purpose**: Calculates RAGAS metrics using LLM-as-a-judge via AI Gateway
+- **Pattern**: Uses RAGAS @experiment() decorator for row-by-row async evaluation
+- **Metrics**: Configured via JSON/YAML file, uses BaseMetric from ragas.metrics
 
 **Phase 4: Publish** (`scripts/publish.py`)
 - **Input**: `data/results/evaluation_scores.json` + workflow name + execution ID + execution number
@@ -331,8 +333,10 @@ data/results/evaluation_scores.json
 ### RAGAS Framework
 - **Purpose**: LLM-as-a-judge evaluation framework for RAG systems
 - **Evaluation Approach**: Uses LLM to assess quality metrics beyond simple exact-match comparison
-- **Available Metrics**: `faithfulness`, `answer_relevancy`, `context_precision`, `context_recall`, `nv_accuracy`
-- **Cost Tracking**: Automatically tracks token usage and calculates evaluation costs
+- **Evaluation Pattern**: Uses @experiment() decorator for row-by-row async processing
+- **Metrics Base Class**: BaseMetric from ragas.metrics (auto-discovered by MetricsRegistry)
+- **Available Metrics**: All BaseMetric subclasses (e.g., Faithfulness, AnswerRelevancy, ContextPrecision, ContextRecall, AspectCritic)
+- **Cost Tracking**: Token usage tracking via @experiment() pattern (currently TODO - returns 0)
 - **LLM Access**: Routes through AI Gateway (LiteLLM) configured via `OPENAI_API_BASE` environment variable
 
 ### A2A Protocol (Agent-to-Agent)
@@ -390,10 +394,12 @@ All scripts follow same pattern: parse arguments → read input file(s) → proc
   - Adds `response` field to each entry
 
 - **`evaluate.py`**: RAGAS metric calculation
+  - Uses RAGAS @experiment() decorator pattern for async evaluation
+  - Loads metrics from config file using MetricsRegistry (discovers BaseMetric subclasses)
   - Configures LangChain OpenAI wrapper to use AI Gateway
-  - Instantiates RAGAS `SingleTurnSample` and `EvaluationDataset`
-  - Runs selected metrics, computes overall scores
-  - Extracts token usage and cost from callback handler
+  - Evaluates each row asynchronously, calculates metric scores
+  - Formats results: computes overall scores (means), preserves custom fields
+  - Note: Token tracking via @experiment() pattern is TODO (currently returns 0)
 
 - **`publish.py`**: OTLP metric publishing
   - Converts evaluation scores to OpenTelemetry metrics
@@ -457,10 +463,23 @@ All scripts follow same pattern: parse arguments → read input file(s) → proc
 - Manual run: `pre-commit run --all-files`
 
 ### Adding New RAGAS Metrics
-1. Add metric import to `scripts/evaluate.py`
-2. Update metric validation in argument parsing
-3. Add to available metrics list in README
-4. Add test cases in `tests/test_evaluate.py` with mocked metric
+Metrics are now automatically discovered via MetricsRegistry if they inherit from BaseMetric:
+1. No code changes needed - MetricsRegistry auto-discovers all BaseMetric subclasses
+2. Add metric to your metrics config file (JSON/YAML) using "class" type with parameters
+3. Add test cases in `tests/test_evaluate.py` with mocked BaseMetric
+4. Example config:
+   ```json
+   {
+     "version": "1.0",
+     "metrics": [
+       {
+         "type": "class",
+         "class_name": "AspectCritic",
+         "parameters": {"name": "custom_aspect", "definition": "Your definition"}
+       }
+     ]
+   }
+   ```
 
 ### Modifying Data Flow
 If changing intermediate file formats or locations:

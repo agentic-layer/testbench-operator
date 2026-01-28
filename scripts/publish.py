@@ -13,6 +13,9 @@ from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.sdk.resources import Resource
 
+from ragas.backends import LocalJSONLBackend
+from ragas import Experiment
+
 # Set up module-level logger
 logging.basicConfig(level=logging.INFO)
 logger: Logger = logging.getLogger(__name__)
@@ -61,7 +64,7 @@ def _get_user_input_truncated(user_input: str | list, max_length: int = 50) -> s
 
 
 def create_and_push_metrics(
-    evaluation_data: EvaluationData, workflow_name: str, execution_id: str, execution_number: int
+    evaluation_data: Experiment, workflow_name: str, execution_id: str, execution_number: int
 ) -> None:
     """
     Create OpenTelemetry metrics for evaluation results and push via OTLP.
@@ -93,8 +96,8 @@ def create_and_push_metrics(
 
         # Collect metric names from individual results (any numeric field is a metric)
         metric_names: set[str] = set()
-        for result in evaluation_data.individual_results:
-            for key, value in result.items():
+        for result in evaluation_data:
+            for key, value in result["individual_results"].items():
                 if _is_metric_value(value):
                     metric_names.add(key)
 
@@ -107,8 +110,8 @@ def create_and_push_metrics(
 
         # Set per-sample values for each metric
         for metric_name in sorted(metric_names):
-            for result in evaluation_data.individual_results:
-                score = result.get(metric_name)
+            for result in evaluation_data:
+                score = result["individual_results"].get(metric_name)
                 if not _is_metric_value(score):
                     logger.debug(f"Skipping invalid metric value for {metric_name}: {score}")
                     continue
@@ -137,47 +140,47 @@ def create_and_push_metrics(
             unit="",
         )
 
-        input_tokens = evaluation_data.total_tokens.get("input_tokens", 0)
-        token_gauge.set(
-            input_tokens,
-            {
-                "type": "input_tokens",
-                "workflow_name": workflow_name,
-                "execution_id": execution_id,
-                "execution_number": execution_number,
-            },
-        )
-        logger.info(
-            f"testbench_evaluation_token_usage{{type=input_tokens, workflow_name={workflow_name}, execution_id={execution_id}, execution_number={execution_number}}} = {input_tokens}"
-        )
-
-        output_tokens = evaluation_data.total_tokens.get("output_tokens", 0)
-        token_gauge.set(
-            output_tokens,
-            {
-                "type": "output_tokens",
-                "workflow_name": workflow_name,
-                "execution_id": execution_id,
-                "execution_number": execution_number,
-            },
-        )
-        logger.info(
-            f"testbench_evaluation_token_usage{{type=output_tokens, workflow_name={workflow_name}, execution_id={execution_id}, execution_number={execution_number}}} = {output_tokens}"
-        )
-
-        # Total cost gauge
-        cost_gauge = meter.create_gauge(
-            name="testbench_evaluation_cost",
-            description="Total cost of RAGAS evaluation in USD",
-            unit="",
-        )
-        cost_gauge.set(
-            evaluation_data.total_cost,
-            {"workflow_name": workflow_name, "execution_id": execution_id, "execution_number": execution_number},
-        )
-        logger.info(
-            f"testbench_evaluation_cost{{workflow_name={workflow_name}, execution_id={execution_id}, execution_number={execution_number}}} = {evaluation_data.total_cost}"
-        )
+        # input_tokens = evaluation_data.total_tokens.get("input_tokens", 0)
+        # token_gauge.set(
+        #     input_tokens,
+        #     {
+        #         "type": "input_tokens",
+        #         "workflow_name": workflow_name,
+        #         "execution_id": execution_id,
+        #         "execution_number": execution_number,
+        #     },
+        # )
+        # logger.info(
+        #     f"testbench_evaluation_token_usage{{type=input_tokens, workflow_name={workflow_name}, execution_id={execution_id}, execution_number={execution_number}}} = {input_tokens}"
+        # )
+        #
+        # output_tokens = evaluation_data.total_tokens.get("output_tokens", 0)
+        # token_gauge.set(
+        #     output_tokens,
+        #     {
+        #         "type": "output_tokens",
+        #         "workflow_name": workflow_name,
+        #         "execution_id": execution_id,
+        #         "execution_number": execution_number,
+        #     },
+        # )
+        # logger.info(
+        #     f"testbench_evaluation_token_usage{{type=output_tokens, workflow_name={workflow_name}, execution_id={execution_id}, execution_number={execution_number}}} = {output_tokens}"
+        # )
+        #
+        # # Total cost gauge
+        # cost_gauge = meter.create_gauge(
+        #     name="testbench_evaluation_cost",
+        #     description="Total cost of RAGAS evaluation in USD",
+        #     unit="",
+        # )
+        # cost_gauge.set(
+        #     evaluation_data.total_cost,
+        #     {"workflow_name": workflow_name, "execution_id": execution_id, "execution_number": execution_number},
+        # )
+        # logger.info(
+        #     f"testbench_evaluation_cost{{workflow_name={workflow_name}, execution_id={execution_id}, execution_number={execution_number}}} = {evaluation_data.total_cost}"
+        # )
 
         # force_flush() returns True if successful, False otherwise
         flush_success = provider.force_flush()
@@ -208,13 +211,13 @@ def publish_metrics(input_file: str, workflow_name: str, execution_id: str, exec
         execution_number: Number of the execution for the current workflow (e.g. 3)
     """
     logger.info(f"Loading evaluation data from {input_file}...")
-    evaluation_data = load_evaluation_data(input_file)
+    evaluation_data = Experiment.load(name="ragas_evaluation", backend=LocalJSONLBackend(root_dir="./data"))
 
-    if not evaluation_data.individual_results:
-        logger.warning("No individual results found in evaluation_scores.json")
+    if len(evaluation_data) == 0:
+        logger.warning("No evaluation results found. Skipping metrics publishing.")
         return
 
-    logger.info(f"Publishing metrics for {len(evaluation_data.individual_results)} samples...")
+    logger.info(f"Publishing metrics for {len(evaluation_data)} samples...")
     logger.info(f"Workflow: {workflow_name}, Execution: {execution_id}")
     create_and_push_metrics(evaluation_data, workflow_name, execution_id, execution_number)
 
@@ -253,7 +256,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     publish_metrics(
-        input_file="data/results/evaluation_scores.json",
+        input_file="data/experiments/ragas_evaluation.jsonl",
         workflow_name=args.workflow_name,
         execution_id=args.execution_id,
         execution_number=args.execution_number,

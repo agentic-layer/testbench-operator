@@ -38,55 +38,52 @@ def temp_dir():
 
 @pytest.fixture
 def evaluation_scores_file(temp_dir):
-    """Create test evaluation_scores.json file"""
-    test_file = Path(temp_dir) / "evaluation_scores.json"
-    test_data = {
-        "overall_scores": {"faithfulness": 0.85, "answer_relevancy": 0.90, "context_recall": 0.80},
-        "individual_results": [
-            {
-                "user_input": "What is the weather?",
-                "response": "It is sunny.",
-                "retrieved_contexts": ["Weather context"],
-                "reference": "Expected answer",
+    """Create test ragas_evaluation.jsonl file"""
+    test_file = Path(temp_dir) / "ragas_evaluation.jsonl"
+    # JSONL format: one JSON object per line with nested individual_results
+    test_rows = [
+        {
+            "user_input": "What is the weather?",
+            "response": "It is sunny.",
+            "retrieved_contexts": ["Weather context"],
+            "reference": "Expected answer",
+            "trace_id": "a1b2c3d4e5f6",
+            "sample_hash": "abc123",
+            "individual_results": {
                 "faithfulness": 0.85,
                 "answer_relevancy": 0.90,
                 "context_recall": 0.80,
-                "trace_id": "a1b2c3d4e5f6",
             },
-            {
-                "user_input": "What is the time?",
-                "response": "It is noon.",
-                "retrieved_contexts": ["Time context"],
-                "reference": "Expected answer",
+        },
+        {
+            "user_input": "What is the time?",
+            "response": "It is noon.",
+            "retrieved_contexts": ["Time context"],
+            "reference": "Expected answer",
+            "trace_id": "b2c3d4e5f6a7",
+            "sample_hash": "def456",
+            "individual_results": {
                 "faithfulness": 0.80,
                 "answer_relevancy": 0.95,
                 "context_recall": 0.85,
-                "trace_id": "b2c3d4e5f6a7",
             },
-        ],
-        "total_tokens": {"input_tokens": 1000, "output_tokens": 200},
-        "total_cost": 0.05,
-    }
+        },
+    ]
 
     with open(test_file, "w") as f:
-        json.dump(test_data, f)
+        for row in test_rows:
+            f.write(json.dumps(row) + "\n")
 
     return test_file
 
 
 @pytest.fixture
 def empty_evaluation_scores_file(temp_dir):
-    """Create evaluation_scores.json with empty results"""
-    test_file = Path(temp_dir) / "empty_evaluation_scores.json"
-    test_data = {
-        "overall_scores": {},
-        "individual_results": [],
-        "total_tokens": {"input_tokens": 0, "output_tokens": 0},
-        "total_cost": 0.0,
-    }
-
+    """Create empty ragas_evaluation.jsonl file"""
+    test_file = Path(temp_dir) / "empty_ragas_evaluation.jsonl"
+    # Empty JSONL file (no rows)
     with open(test_file, "w") as f:
-        json.dump(test_data, f)
+        pass  # Create empty file
 
     return test_file
 
@@ -121,7 +118,7 @@ def test_is_valid_metric_value_with_non_numeric():
 
 # Test load_evaluation_data
 def test_loads_evaluation_data(evaluation_scores_file):
-    """Test loading evaluation data from JSON"""
+    """Test loading evaluation data from JSONL"""
     data = load_evaluation_data(str(evaluation_scores_file))
 
     assert len(data.individual_results) == 2
@@ -129,10 +126,12 @@ def test_loads_evaluation_data(evaluation_scores_file):
     assert "faithfulness" in data.metric_names
     assert "answer_relevancy" in data.metric_names
     assert "context_recall" in data.metric_names
-    assert data.total_tokens["input_tokens"] == 1000
-    assert data.total_tokens["output_tokens"] == 200
-    assert data.total_cost == 0.05
-    assert data.overall_scores["faithfulness"] == 0.85
+    # Token and cost tracking not available in new format
+    assert data.total_tokens["input_tokens"] == 0
+    assert data.total_tokens["output_tokens"] == 0
+    assert data.total_cost == 0.0
+    # Overall scores calculated from individual results
+    assert data.overall_scores["faithfulness"] == 0.825  # Mean of 0.85 and 0.80
 
 
 def test_loads_empty_evaluation_data(empty_evaluation_scores_file):
@@ -162,35 +161,38 @@ def test_handles_invalid_json(temp_dir):
 
 
 def test_handles_missing_fields(temp_dir):
-    """Test error when required fields are missing"""
-    invalid_file = Path(temp_dir) / "missing_fields.json"
-    with open(invalid_file, "w") as f:
-        json.dump({"overall_scores": {}}, f)  # Missing other required fields
+    """Test handling of rows without individual_results"""
+    test_file = Path(temp_dir) / "missing_fields.jsonl"
+    # JSONL with a row missing individual_results
+    with open(test_file, "w") as f:
+        f.write(json.dumps({"user_input": "test", "trace_id": "123"}) + "\n")
+        f.write(
+            json.dumps(
+                {"user_input": "test2", "trace_id": "456", "individual_results": {"metric1": 0.5}}
+            )
+            + "\n"
+        )
 
-    with pytest.raises(ValueError, match="Missing required field"):
-        load_evaluation_data(str(invalid_file))
+    # Should skip rows without individual_results
+    data = load_evaluation_data(str(test_file))
+    assert len(data.individual_results) == 1
 
 
 def test_discovers_metric_names_correctly(temp_dir):
     """Test metric name discovery from individual results"""
-    test_file = Path(temp_dir) / "test.json"
-    test_data = {
-        "overall_scores": {"metric1": 0.5},
-        "individual_results": [
-            {
-                "user_input": "test",
-                "response": "answer",
-                "metric1": 0.5,
-                "metric2": 0.7,
-                "trace_id": "abc",
-            }
-        ],
-        "total_tokens": {"input_tokens": 0, "output_tokens": 0},
-        "total_cost": 0.0,
+    test_file = Path(temp_dir) / "test.jsonl"
+    test_row = {
+        "user_input": "test",
+        "response": "answer",
+        "trace_id": "abc",
+        "individual_results": {
+            "metric1": 0.5,
+            "metric2": 0.7,
+        },
     }
 
     with open(test_file, "w") as f:
-        json.dump(test_data, f)
+        f.write(json.dumps(test_row) + "\n")
 
     data = load_evaluation_data(str(test_file))
     assert set(data.metric_names) == {"metric1", "metric2"}
@@ -198,30 +200,29 @@ def test_discovers_metric_names_correctly(temp_dir):
 
 def test_filters_reserved_fields_from_metrics(temp_dir):
     """Test that reserved fields are not considered metrics"""
-    test_file = Path(temp_dir) / "test.json"
-    test_data = {
-        "overall_scores": {},
-        "individual_results": [
-            {
-                "user_input": "test",
-                "response": "answer",
-                "retrieved_contexts": ["context"],
-                "reference": "ref",
-                "trace_id": "abc",
-                "actual_metric": 0.5,
-            }
-        ],
-        "total_tokens": {"input_tokens": 0, "output_tokens": 0},
-        "total_cost": 0.0,
+    test_file = Path(temp_dir) / "test.jsonl"
+    test_row = {
+        "user_input": "test",
+        "response": "answer",
+        "retrieved_contexts": ["context"],
+        "reference": "ref",
+        "trace_id": "abc",
+        "sample_hash": "hash123",
+        "reference_tool_calls": [],
+        "individual_results": {
+            "actual_metric": 0.5,
+        },
     }
 
     with open(test_file, "w") as f:
-        json.dump(test_data, f)
+        f.write(json.dumps(test_row) + "\n")
 
     data = load_evaluation_data(str(test_file))
     assert data.metric_names == ["actual_metric"]
     assert "user_input" not in data.metric_names
     assert "response" not in data.metric_names
+    assert "sample_hash" not in data.metric_names
+    assert "reference_tool_calls" not in data.metric_names
 
 
 # Test calculate_metric_statistics
@@ -289,12 +290,13 @@ def test_prepares_chart_data_structure(evaluation_scores_file):
 
 
 def test_chart_data_has_correct_overall_scores(evaluation_scores_file):
-    """Test overall scores are correctly transferred"""
+    """Test overall scores are correctly calculated"""
     viz_data = load_evaluation_data(str(evaluation_scores_file))
     chart_data = prepare_chart_data(viz_data)
 
-    assert chart_data["overall_scores"]["faithfulness"] == 0.85
-    assert chart_data["overall_scores"]["answer_relevancy"] == 0.90
+    # Overall scores are calculated as mean from individual results
+    assert chart_data["overall_scores"]["faithfulness"] == 0.825  # Mean of 0.85 and 0.80
+    assert chart_data["overall_scores"]["answer_relevancy"] == 0.925  # Mean of 0.90 and 0.95
 
 
 def test_chart_data_has_metric_distributions(evaluation_scores_file):
@@ -330,18 +332,15 @@ def test_handles_empty_individual_results(empty_evaluation_scores_file):
 
 def test_handles_missing_trace_ids(temp_dir):
     """Test handling of missing trace_ids"""
-    test_file = Path(temp_dir) / "no_trace.json"
-    test_data = {
-        "overall_scores": {"metric1": 0.5},
-        "individual_results": [
-            {"user_input": "test", "response": "answer", "metric1": 0.5}  # No trace_id
-        ],
-        "total_tokens": {"input_tokens": 0, "output_tokens": 0},
-        "total_cost": 0.0,
-    }
+    test_file = Path(temp_dir) / "no_trace.jsonl"
+    test_row = {
+        "user_input": "test",
+        "response": "answer",
+        "individual_results": {"metric1": 0.5},
+    }  # No trace_id
 
     with open(test_file, "w") as f:
-        json.dump(test_data, f)
+        f.write(json.dumps(test_row) + "\n")
 
     viz_data = load_evaluation_data(str(test_file))
     chart_data = prepare_chart_data(viz_data)
@@ -411,8 +410,8 @@ def test_html_contains_summary_cards(evaluation_scores_file, temp_dir):
     html_content = output_file.read_text()
     assert "Total Samples" in html_content
     assert "Metrics Evaluated" in html_content
-    assert "Total Tokens" in html_content
-    assert "Total Cost" in html_content
+    # Tokens and Cost cards are hidden when values are 0 (new JSONL format doesn't track these)
+    # So we don't check for them anymore
 
 
 def test_html_contains_timestamp(evaluation_scores_file, temp_dir):
@@ -585,26 +584,21 @@ def test_format_multi_turn_conversation():
 
 def test_prepare_chart_data_with_multi_turn(temp_dir):
     """Test chart data preparation with multi-turn conversations"""
-    test_file = Path(temp_dir) / "multi_turn.json"
-    test_data = {
-        "overall_scores": {"metric1": 0.5},
-        "individual_results": [
-            {
-                "user_input": [
-                    {"content": "Hello", "type": "human"},
-                    {"content": "Hi", "type": "ai"},
-                ],
-                "response": "Response",
-                "metric1": 0.5,
-                "trace_id": "abc123",
-            }
+    test_file = Path(temp_dir) / "multi_turn.jsonl"
+    test_row = {
+        "user_input": [
+            {"content": "Hello", "type": "human"},
+            {"content": "Hi", "type": "ai"},
         ],
-        "total_tokens": {"input_tokens": 100, "output_tokens": 50},
-        "total_cost": 0.01,
+        "response": "Response",
+        "trace_id": "abc123",
+        "individual_results": {
+            "metric1": 0.5,
+        },
     }
 
     with open(test_file, "w") as f:
-        json.dump(test_data, f)
+        f.write(json.dumps(test_row) + "\n")
 
     viz_data = load_evaluation_data(str(test_file))
     chart_data = prepare_chart_data(viz_data)
@@ -618,29 +612,24 @@ def test_prepare_chart_data_with_multi_turn(temp_dir):
 
 def test_html_with_multi_turn_conversations(temp_dir):
     """Test HTML generation with multi-turn conversations"""
-    test_file = Path(temp_dir) / "multi_turn.json"
+    test_file = Path(temp_dir) / "multi_turn.jsonl"
     output_file = Path(temp_dir) / "multi_turn_report.html"
 
-    test_data = {
-        "overall_scores": {"metric1": 0.8},
-        "individual_results": [
-            {
-                "user_input": [
-                    {"content": "Question 1", "type": "human"},
-                    {"content": "Answer 1", "type": "ai"},
-                    {"content": "Question 2", "type": "human"},
-                ],
-                "response": "Final response",
-                "metric1": 0.8,
-                "trace_id": "test123",
-            }
+    test_row = {
+        "user_input": [
+            {"content": "Question 1", "type": "human"},
+            {"content": "Answer 1", "type": "ai"},
+            {"content": "Question 2", "type": "human"},
         ],
-        "total_tokens": {"input_tokens": 100, "output_tokens": 50},
-        "total_cost": 0.01,
+        "response": "Final response",
+        "trace_id": "test123",
+        "individual_results": {
+            "metric1": 0.8,
+        },
     }
 
     with open(test_file, "w") as f:
-        json.dump(test_data, f)
+        f.write(json.dumps(test_row) + "\n")
 
     main(str(test_file), str(output_file), "multi-turn-workflow", "multi-exec-001", 1)
 

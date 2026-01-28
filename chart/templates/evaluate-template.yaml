@@ -22,7 +22,7 @@ spec:
     - name: evaluate-results
       artifacts:
         paths:
-          - "data/results/evaluation_scores.json"
+          - "data/experiments/ragas_evaluation.jsonl"
       run:
         image: {{ include "testbench.image" . }}
         command:
@@ -30,14 +30,7 @@ spec:
           - -c
         args:
           - |
-            uv run python3 evaluate.py "{{`{{ config.model }}`}}" --metrics-config "/app/config/metrics.yaml" && \
-            if [ -f data/results/evaluation_scores.json ]; then
-              echo "✓ Evaluation completed"
-              cat data/results/evaluation_scores.json
-            else
-              echo "✗ Error: Results file not created"
-              exit 1
-            fi
+            uv run python3 evaluate.py "{{`{{ config.model }}`}}" --metrics-config "/app/config/metrics.yaml"
         env:
-          - name: OPENAI_API_BASE
+          - name: OPENAI_BASE_URL
             value: "{{`{{ config.openApiBasePath }}`}}"

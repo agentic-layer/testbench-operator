@@ -26,6 +26,43 @@ from publish import (
 from run import _get_sample_hash
 
 
+# Helper function to convert test data to Experiment format
+def _create_mock_experiment(individual_results):
+    """
+    Convert individual results to the format expected by create_and_push_metrics.
+
+    The function expects an iterable where each item is a dict with:
+    - "individual_results": dict of metric_name -> score
+    - Other fields like "user_input", "sample_hash", "trace_id"
+    """
+
+    class MockExperiment:
+        def __init__(self, results):
+            self.results = results
+
+        def __iter__(self):
+            # Convert from test format to experiment format
+            for result in self.results:
+                # Extract metrics from the result (anything that's a numeric value except trace_id/sample_hash)
+                metrics = {}
+                other_fields = {}
+                for key, value in result.items():
+                    if key in ["user_input", "sample_hash", "trace_id"]:
+                        other_fields[key] = value
+                    elif _is_metric_value(value):
+                        metrics[key] = value
+                    else:
+                        other_fields[key] = value
+
+                # Create result in experiment format
+                yield {**other_fields, "individual_results": metrics}
+
+        def __len__(self):
+            return len(self.results)
+
+    return MockExperiment(individual_results)
+
+
 # Mock classes for OpenTelemetry meter provider (used by HTTPXClientInstrumentor)
 # Use underscore prefix to avoid naming conflicts with test-specific mock classes
 class _OtelMockMeter:
@@ -275,26 +312,23 @@ def test_file_not_found(temp_dir):
 # TestCreateAndPushMetrics tests
 def test_creates_gauges_for_each_metric(monkeypatch):
     """Test that a Gauge is created for each metric plus token/cost gauges"""
-    evaluation_data = EvaluationData(
-        individual_results=[
-            {
-                "user_input": "Question 1",
-                "sample_hash": "abc123",
-                "faithfulness": 0.85,
-                "answer_relevancy": 0.90,
-                "trace_id": "trace1",
-            },
-            {
-                "user_input": "Question 2",
-                "sample_hash": "def456",
-                "faithfulness": 0.80,
-                "answer_relevancy": 0.95,
-                "trace_id": "trace2",
-            },
-        ],
-        total_tokens={"input_tokens": 1000, "output_tokens": 200},
-        total_cost=0.05,
-    )
+    individual_results = [
+        {
+            "user_input": "Question 1",
+            "sample_hash": "abc123",
+            "faithfulness": 0.85,
+            "answer_relevancy": 0.90,
+            "trace_id": "trace1",
+        },
+        {
+            "user_input": "Question 2",
+            "sample_hash": "def456",
+            "faithfulness": 0.80,
+            "answer_relevancy": 0.95,
+            "trace_id": "trace2",
+        },
+    ]
+    evaluation_data = _create_mock_experiment(individual_results)
 
     # Mock the meter and gauge
     create_gauge_calls = []
@@ -348,36 +382,32 @@ def test_creates_gauges_for_each_metric(monkeypatch):
         execution_number=42,
     )
 
-    # Verify gauges created: 1 metric gauge + 1 token gauge + 1 cost gauge = 3
-    assert len(create_gauge_calls) == 3
+    # Verify gauges created: 1 metric gauge + 1 token gauge (cost gauge is commented out in code)
+    assert len(create_gauge_calls) == 2
 
     # Verify gauge names
     gauge_names = [call["name"] for call in create_gauge_calls]
     assert "testbench_evaluation_metric" in gauge_names
     assert "testbench_evaluation_token_usage" in gauge_names
-    assert "testbench_evaluation_cost" in gauge_names
 
 
 def test_sets_per_sample_gauge_values(monkeypatch):
     """Test that gauge values are set for each sample with all required attributes"""
-    evaluation_data = EvaluationData(
-        individual_results=[
-            {
-                "user_input": "Question 1",
-                "sample_hash": _get_sample_hash("Question 1"),
-                "faithfulness": 0.85,
-                "trace_id": "d4e5f6a7b8c9012345678901234567dd",
-            },
-            {
-                "user_input": "This is a very long question that exceeds fifty characters in length",
-                "sample_hash": _get_sample_hash("This is a very long question that exceeds fifty characters in length"),
-                "faithfulness": 0.80,
-                "trace_id": "e5f6a7b8c9d0123456789012345678ee",
-            },
-        ],
-        total_tokens={"input_tokens": 0, "output_tokens": 0},
-        total_cost=0.0,
-    )
+    individual_results = [
+        {
+            "user_input": "Question 1",
+            "sample_hash": _get_sample_hash("Question 1"),
+            "faithfulness": 0.85,
+            "trace_id": "d4e5f6a7b8c9012345678901234567dd",
+        },
+        {
+            "user_input": "This is a very long question that exceeds fifty characters in length",
+            "sample_hash": _get_sample_hash("This is a very long question that exceeds fifty characters in length"),
+            "faithfulness": 0.80,
+            "trace_id": "e5f6a7b8c9d0123456789012345678ee",
+        },
+    ]
+    evaluation_data = _create_mock_experiment(individual_results)
 
     # Mock the meter and gauge
     set_calls = []
@@ -463,18 +493,15 @@ def test_sets_per_sample_gauge_values(monkeypatch):
 
 def test_pushes_via_otlp(monkeypatch):
     """Test that metrics are pushed via OTLP"""
-    evaluation_data = EvaluationData(
-        individual_results=[
-            {
-                "user_input": "Q1",
-                "sample_hash": "abc123",
-                "faithfulness": 0.85,
-                "trace_id": "f6a7b8c9d0e1234567890123456789ff",
-            }
-        ],
-        total_tokens={"input_tokens": 100, "output_tokens": 50},
-        total_cost=0.01,
-    )
+    individual_results = [
+        {
+            "user_input": "Q1",
+            "sample_hash": "abc123",
+            "faithfulness": 0.85,
+            "trace_id": "f6a7b8c9d0e1234567890123456789ff",
+        }
+    ]
+    evaluation_data = _create_mock_experiment(individual_results)
 
     # Mock the meter and gauge
     class MockGauge:
@@ -539,18 +566,15 @@ def test_pushes_via_otlp(monkeypatch):
 
 def test_handles_push_error(monkeypatch):
     """Test error handling when OTLP export fails"""
-    evaluation_data = EvaluationData(
-        individual_results=[
-            {
-                "user_input": "Q1",
-                "sample_hash": "abc123",
-                "faithfulness": 0.85,
-                "trace_id": "a7b8c9d0e1f2345678901234567890aa",
-            }
-        ],
-        total_tokens={"input_tokens": 0, "output_tokens": 0},
-        total_cost=0.0,
-    )
+    individual_results = [
+        {
+            "user_input": "Q1",
+            "sample_hash": "abc123",
+            "faithfulness": 0.85,
+            "trace_id": "a7b8c9d0e1f2345678901234567890aa",
+        }
+    ]
+    evaluation_data = _create_mock_experiment(individual_results)
 
     def mock_get_meter(*args, **kwargs):
         return _OtelMockMeter()
@@ -594,7 +618,7 @@ def test_handles_push_error(monkeypatch):
 
 
 # TestPublishMetrics tests
-def test_publish_metrics_calls_create_and_push(evaluation_scores_file, monkeypatch):
+def test_publish_metrics_calls_create_and_push(evaluation_scores_file, monkeypatch, tmp_path):
     """Test that publish_metrics calls create_and_push_metrics"""
     create_push_calls = []
 
@@ -608,6 +632,18 @@ def test_publish_metrics_calls_create_and_push(evaluation_scores_file, monkeypat
             }
         )
 
+    # Create mock Experiment data
+    individual_results = [
+        {"user_input": "Q1", "sample_hash": "hash1", "faithfulness": 0.85, "trace_id": "trace1"},
+        {"user_input": "Q2", "sample_hash": "hash2", "faithfulness": 0.90, "trace_id": "trace2"},
+    ]
+    mock_experiment = _create_mock_experiment(individual_results)
+
+    # Mock Experiment.load to return our mock experiment
+    def mock_experiment_load(name, backend):
+        return mock_experiment
+
+    monkeypatch.setattr("publish.Experiment.load", mock_experiment_load)
     monkeypatch.setattr("publish.create_and_push_metrics", mock_create_push)
     monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "localhost:4318")
 
@@ -622,7 +658,7 @@ def test_publish_metrics_calls_create_and_push(evaluation_scores_file, monkeypat
     assert len(create_push_calls) == 1
 
     # Verify parameters
-    assert len(create_push_calls[0]["evaluation_data"].individual_results) == 2
+    assert create_push_calls[0]["evaluation_data"] == mock_experiment
     assert create_push_calls[0]["workflow_name"] == "test-workflow"
     assert create_push_calls[0]["execution_id"] == "exec-test-123"
     assert create_push_calls[0]["execution_number"] == 42
@@ -630,28 +666,25 @@ def test_publish_metrics_calls_create_and_push(evaluation_scores_file, monkeypat
 
 def test_publish_metrics_with_empty_results(temp_dir, monkeypatch):
     """Test behavior when individual_results is empty"""
-    # Create file with empty individual_results
-    test_data = {
-        "overall_scores": {},
-        "individual_results": [],
-        "total_tokens": {"input_tokens": 0, "output_tokens": 0},
-        "total_cost": 0.0,
-    }
+    # Create empty mock experiment
+    mock_experiment = _create_mock_experiment([])
 
-    empty_file = Path(temp_dir) / "empty_scores.json"
-    with open(empty_file, "w") as f:
-        json.dump(test_data, f)
+    # Mock Experiment.load to return empty experiment
+    def mock_experiment_load(name, backend):
+        return mock_experiment
 
     create_push_calls = []
 
     def mock_create_push(evaluation_data, workflow_name, execution_id, execution_number):
         create_push_calls.append(True)
 
+    monkeypatch.setattr("publish.Experiment.load", mock_experiment_load)
     monkeypatch.setattr("publish.create_and_push_metrics", mock_create_push)
     monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "localhost:4318")
 
+    # input_file is not used since we mock Experiment.load
     publish_metrics(
-        input_file=str(empty_file),
+        input_file="unused.json",
         workflow_name="test-workflow",
         execution_id="exec-test-123",
         execution_number=42,
@@ -664,6 +697,29 @@ def test_publish_metrics_with_empty_results(temp_dir, monkeypatch):
 # TestIntegrationWithTestData tests
 def test_publish_realistic_scores(realistic_scores_file, monkeypatch):
     """Test publishing realistic evaluation scores"""
+    # Create mock experiment with realistic data
+    individual_results = [
+        {
+            "user_input": "What is the weather?",
+            "sample_hash": "abc123def456",
+            "faithfulness": 0.85,
+            "answer_relevancy": 0.90,
+            "trace_id": "a1b2c3d4e5f6789012345678901234aa",
+        },
+        {
+            "user_input": "What is the time?",
+            "sample_hash": "def456abc123",
+            "faithfulness": 0.80,
+            "answer_relevancy": 0.95,
+            "trace_id": "b2c3d4e5f6a7890123456789012345bb",
+        },
+    ]
+    mock_experiment = _create_mock_experiment(individual_results)
+
+    # Mock Experiment.load
+    def mock_experiment_load(name, backend):
+        return mock_experiment
+
     # Mock the meter and gauge
     create_gauge_calls = []
 
@@ -707,6 +763,7 @@ def test_publish_realistic_scores(realistic_scores_file, monkeypatch):
         exporter_calls.append(True)
         return MockExporter()
 
+    monkeypatch.setattr("publish.Experiment.load", mock_experiment_load)
     monkeypatch.setattr("publish.metrics.get_meter", mock_get_meter)
     monkeypatch.setattr("publish.MeterProvider", mock_provider_init)
     monkeypatch.setattr("publish.OTLPMetricExporter", mock_exporter_init)
@@ -722,10 +779,9 @@ def test_publish_realistic_scores(realistic_scores_file, monkeypatch):
     # Verify OTLPMetricExporter was called
     assert len(exporter_calls) == 1
 
-    # Verify 3 gauges: 1 metric gauge + 1 token gauge + 1 cost gauge
-    assert len(create_gauge_calls) == 3
+    # Verify 2 gauges: 1 metric gauge + 1 token gauge (cost gauge is commented out in code)
+    assert len(create_gauge_calls) == 2
 
     gauge_names = [call["name"] for call in create_gauge_calls]
     assert "testbench_evaluation_metric" in gauge_names
     assert "testbench_evaluation_token_usage" in gauge_names
-    assert "testbench_evaluation_cost" in gauge_names
