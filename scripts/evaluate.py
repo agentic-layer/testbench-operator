@@ -9,11 +9,11 @@ from typing import Any, Union
 
 import ragas.metrics.collections as metrics_module
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from openai import AsyncOpenAI
 from ragas import Experiment, experiment
 from ragas.backends import LocalJSONLBackend
 from ragas.llms import llm_factory
 from ragas.metrics.collections import BaseMetric
-from openai import AsyncOpenAI
 
 # Set up module-level logger
 logging.basicConfig(level=logging.INFO)
@@ -284,7 +284,9 @@ async def evaluation_experiment(
                 filtered_params["user_input"] = map_user_input(filtered_params["user_input"])
 
             if "reference_tool_calls" in filtered_params and isinstance(filtered_params["reference_tool_calls"], list):
-                filtered_params["reference_tool_calls"] = map_reference_tool_calls(filtered_params["reference_tool_calls"])
+                filtered_params["reference_tool_calls"] = map_reference_tool_calls(
+                    filtered_params["reference_tool_calls"]
+                )
 
             # Calculate metric_result with only the required parameters
             metric_result = await metric.ascore(**filtered_params)  # type: ignore[call-arg]
@@ -297,9 +299,17 @@ async def evaluation_experiment(
     return result
 
 
-def map_user_input(user_input: dict[str, Any]) -> list[Union[HumanMessage, AIMessage, ToolMessage]]:
-    # Map input dicts to appropriate message types based on type field
-    mapped_messages = []
+def map_user_input(user_input: list[Any]) -> list[Union[HumanMessage, AIMessage, ToolMessage]]:
+    """
+    Map input message dicts to appropriate LangChain message types.
+
+    Args:
+        user_input: List of message dictionaries with 'type' and 'content' fields
+
+    Returns:
+        List of LangChain message objects (HumanMessage, AIMessage, ToolMessage)
+    """
+    mapped_messages: list[Union[HumanMessage, AIMessage, ToolMessage]] = []
     for input_msg in user_input:
         if isinstance(input_msg, dict) and "type" in input_msg:
             msg_type = input_msg["type"]
@@ -312,11 +322,13 @@ def map_user_input(user_input: dict[str, Any]) -> list[Union[HumanMessage, AIMes
             elif msg_type == "tool":
                 mapped_messages.append(ToolMessage(content=content, tool_call_id=input_msg.get("tool_call_id", "")))
             else:
-                logger.warning(f"Unknown message type '{msg_type}', keeping original dict")
-                mapped_messages.append(input_msg)
+                logger.warning(f"Unknown message type '{msg_type}', treating as human message")
+                mapped_messages.append(HumanMessage(content=content))
         else:
-            # If not a dict with type, keep original
-            mapped_messages.append(input_msg)
+            # If not a dict with type, treat as human message
+            logger.warning(f"Invalid message format, treating as human message: {input_msg}")
+            content_str = str(input_msg.get("content", "")) if isinstance(input_msg, dict) else str(input_msg)
+            mapped_messages.append(HumanMessage(content=content_str))
     return mapped_messages
 
 
@@ -390,7 +402,7 @@ async def main(
     )
 
     logger.info("Evaluation experiment completed")
-    logger.info(f"Evaluation scores saved to './data/experiments/ragas_evaluation.jsonl'")
+    logger.info("Evaluation scores saved to './data/experiments/ragas_evaluation.jsonl'")
 
 
 if __name__ == "__main__":

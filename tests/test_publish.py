@@ -16,7 +16,6 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 from publish import (
-    EvaluationData,
     _get_user_input_truncated,
     _is_metric_value,
     create_and_push_metrics,
@@ -382,13 +381,12 @@ def test_creates_gauges_for_each_metric(monkeypatch):
         execution_number=42,
     )
 
-    # Verify gauges created: 1 metric gauge + 1 token gauge (cost gauge is commented out in code)
-    assert len(create_gauge_calls) == 2
+    # Verify gauges created: 1 metric gauge (token and cost gauges are commented out as TODO)
+    assert len(create_gauge_calls) == 1
 
     # Verify gauge names
     gauge_names = [call["name"] for call in create_gauge_calls]
     assert "testbench_evaluation_metric" in gauge_names
-    assert "testbench_evaluation_token_usage" in gauge_names
 
 
 def test_sets_per_sample_gauge_values(monkeypatch):
@@ -779,9 +777,8 @@ def test_publish_realistic_scores(realistic_scores_file, monkeypatch):
     # Verify OTLPMetricExporter was called
     assert len(exporter_calls) == 1
 
-    # Verify 2 gauges: 1 metric gauge + 1 token gauge (cost gauge is commented out in code)
-    assert len(create_gauge_calls) == 2
+    # Verify 1 gauge: 1 metric gauge (token and cost gauges are commented out as TODO)
+    assert len(create_gauge_calls) == 1
 
     gauge_names = [call["name"] for call in create_gauge_calls]
     assert "testbench_evaluation_metric" in gauge_names
-    assert "testbench_evaluation_token_usage" in gauge_names

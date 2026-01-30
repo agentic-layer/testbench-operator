@@ -124,9 +124,7 @@ def load_evaluation_data(file_path: str) -> VisualizationData:
     overall_scores = {}
     for metric_name in metric_names:
         scores = [
-            r[metric_name]
-            for r in flattened_results
-            if metric_name in r and _is_valid_metric_value(r[metric_name])
+            r[metric_name] for r in flattened_results if metric_name in r and _is_valid_metric_value(r[metric_name])
         ]
         if scores:
             overall_scores[metric_name] = sum(scores) / len(scores)

@@ -12,9 +12,8 @@ from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExp
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.sdk.resources import Resource
-
-from ragas.backends import LocalJSONLBackend
 from ragas import Experiment
+from ragas.backends import LocalJSONLBackend
 
 # Set up module-level logger
 logging.basicConfig(level=logging.INFO)
@@ -133,13 +132,13 @@ def create_and_push_metrics(
                 metric_gauge.set(score, attributes)
                 logger.info(f"testbench_evaluation_metric{attributes} = {score}")
 
-        # Token usage gauge with 'type' attribute
-        token_gauge = meter.create_gauge(
-            name="testbench_evaluation_token_usage",
-            description="Token usage from RAGAS evaluation",
-            unit="",
-        )
-
+        # Token usage gauge with 'type' attribute - TODO: Uncomment when token tracking is implemented
+        # token_gauge = meter.create_gauge(
+        #     name="testbench_evaluation_token_usage",
+        #     description="Token usage from RAGAS evaluation",
+        #     unit="",
+        # )
+        #
         # input_tokens = evaluation_data.total_tokens.get("input_tokens", 0)
         # token_gauge.set(
         #     input_tokens,

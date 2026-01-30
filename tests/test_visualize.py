@@ -82,7 +82,7 @@ def empty_evaluation_scores_file(temp_dir):
     """Create empty ragas_evaluation.jsonl file"""
     test_file = Path(temp_dir) / "empty_ragas_evaluation.jsonl"
     # Empty JSONL file (no rows)
-    with open(test_file, "w") as f:
+    with open(test_file, "w"):
         pass  # Create empty file
 
     return test_file
@@ -166,12 +166,7 @@ def test_handles_missing_fields(temp_dir):
     # JSONL with a row missing individual_results
     with open(test_file, "w") as f:
         f.write(json.dumps({"user_input": "test", "trace_id": "123"}) + "\n")
-        f.write(
-            json.dumps(
-                {"user_input": "test2", "trace_id": "456", "individual_results": {"metric1": 0.5}}
-            )
-            + "\n"
-        )
+        f.write(json.dumps({"user_input": "test2", "trace_id": "456", "individual_results": {"metric1": 0.5}}) + "\n")
 
     # Should skip rows without individual_results
     data = load_evaluation_data(str(test_file))
